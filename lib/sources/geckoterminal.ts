@@ -53,7 +53,13 @@ const TF_MAP: Record<Timeframe, TfSpec> = {
   "15m": { path: "minute", aggregate: 15, limit: 240 },
   "1h": { path: "hour", aggregate: 1, limit: 240 },
   "4h": { path: "hour", aggregate: 4, limit: 180 },
-  "1d": { path: "day", aggregate: 1, limit: 180 },
+  // 1000 = the endpoint's max, and deliberately NOT 180 (M10). The daily series is
+  // the ATH source (lib/metrics/ath.ts), which is only trustworthy if it spans the
+  // pool's whole life. The main pool had 132 candles on 2026-07-20, so a 180 cap
+  // would have started silently truncating history ~48 days later — and a truncated
+  // window makes a displayed "ATH" DROP over time, which is worse than no ATH at
+  // all. Flow of Mana still slices its own last 30 days off this series.
+  "1d": { path: "day", aggregate: 1, limit: 1000 },
 };
 
 export function isTimeframe(value: unknown): value is Timeframe {

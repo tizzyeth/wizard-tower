@@ -65,23 +65,25 @@ app/
   api/social/route.ts          # ?source=official|community        (reads DB)
   api/cron/snapshot/route.ts   # POST, Bearer CRON_SECRET → Helius scan → DB
   api/cron/social/route.ts     # POST, Bearer CRON_SECRET → X poll  → DB
+  api/cron/trades/route.ts     # POST, Bearer CRON_SECRET → trade windows → DB
 components/cards/*             # one component per module + its use*.ts query hook
 components/wizard/*            # CardFrame, StatHero, StatGrid, Rune, DataStatus, …
 components/header/ components/footer/
 lib/sources/*                  # one module per provider (the pattern above)
 lib/metrics/*                  # PURE math: concentration, verdict, merge-trades, safety, cadence
 lib/holders.ts lib/social.ts   # DB read paths (same Result envelope)
+lib/trades-archive.ts          # DB read/write for the trade archive + flow overlay
 config/token.ts                # THE config — the only token-specific file
 db/schema.ts                   # Drizzle schema
 test/fixtures/                 # recorded live responses (unit tests)
 test/e2e/fixtures/             # recorded /api/* responses (Playwright)
-.github/workflows/             # snapshot.yml (hourly) · social.yml (every 30 min)
+.github/workflows/             # snapshot.yml (hourly) · social.yml (30 min) · trades-archive.yml (15 min)
 ```
 
 **Where things live — the rules:**
 
 - **Cards** live in `components/cards/`, one file per module, each paired with a `use*.ts` TanStack hook that owns its query key and refetch interval. Cards are `"use client"`; they receive a **server-rendered seed** as `initial` so the page paints real numbers with no skeleton flash, then poll from there.
-- **Pure metrics** live in `lib/metrics/`. No fetching, no clock, no randomness — every derived number (HHI, top-N shares, buckets, the verdict rubric, trade merge/dedupe) is a pure function unit-tested against recorded fixtures. **Put math here, not in a component.**
+- **Pure metrics** live in `lib/metrics/`. No fetching, no clock, no randomness — every derived number (HHI, top-N shares, buckets, the verdict rubric, trade merge/dedupe, ATH) is a pure function unit-tested against recorded fixtures. **Put math here, not in a component.**
 - **Nothing token-specific** goes anywhere except `config/token.ts`. See [Retargeting](#retargeting-to-a-different-token).
 
 ### Server rendering and the shared query key
@@ -109,11 +111,12 @@ All keys are **server-side only**. The browser talks exclusively to our own `/ap
 |---|---|---|---|---|---|
 | **DexScreener** (no key) | `GET api.dexscreener.com/latest/dex/tokens/{mint}` | **30s** | 30s | 300 req/min | `/api/market` → Ledger, Cauldrons, Verdict, header ticker |
 | **GeckoTerminal** OHLCV (no key) | `GET api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/ohlcv/{tf}` | **60s** | 60s | ~30 req/min, **shared** | `/api/ohlcv` → Scrying Glass, Flow of Mana |
-| **GeckoTerminal** trades (no key) | `GET …/networks/solana/pools/{pool}/trades` | **30s** | 30s | ~30 req/min, **shared** | `/api/trades` → Ledger of Deeds, Flow of Mana |
+| **GeckoTerminal** trades (no key) | `GET …/networks/solana/pools/{pool}/trades` | **30s** | 30s | ~30 req/min, **shared**; **≤300 trades AND ≤24h per pool** | `/api/trades` → Ledger of Deeds, Flow of Mana; `cron/trades` → `trades` |
 | **RugCheck** (no key) | `GET api.rugcheck.xyz/v1/tokens/{mint}/report` | **1h** | 10min | "be polite" | `/api/safety` → Wards, Cauldrons, Verdict |
 | **Helius** DAS (key) | `POST mainnet.helius-rpc.com/?api-key=` — `getTokenAccounts`, `getTokenSupply` | none — **the DB is the store** | n/a | 1M credits/mo, 10 rps | `cron/snapshot` → `holder_snapshots` |
 | **Helius** RPC (key) | `POST mainnet.helius-rpc.com/?api-key=` — `getAccountInfo` | **1h** | n/a | ↑ same quota | Mimo's Tribute (fee-share route) |
 | **Our DB** (holders) | `holder_snapshots` via Drizzle | **60s** | 60s | — | `/api/holders` → Council, Ledger, Wards, Verdict |
+| **Our DB** (trades) | `trades` via Drizzle | **60s** | 30s (via `/api/trades`) | — | `/api/trades` flow → Flow of Mana, Verdict Activity |
 | **X API v2** (bearer, paid) | `GET api.x.com/2/users/{id}/tweets` · `GET /2/tweets/search/recent` | DB-buffered; **60s** read cache | 60s | pay-per-use | `cron/social` → `x_posts` → `/api/social` → Prophecy Feed |
 
 **The GeckoTerminal budget is shared.** Both Gecko modules go through one token-bucket limiter in `lib/sources/geckoLimiter.ts` — capacity **25/min** (deliberately under the ~30/min ceiling), refilled continuously, and it will never block a request longer than **3s**: past that the caller bails to its stale-while-revalidate path instead of queueing. If you add a third Gecko consumer, import `acquireGeckoToken` — do **not** add a second limiter.
@@ -122,11 +125,14 @@ All keys are **server-side only**. The browser talks exclusively to our own `/ap
 
 ### Database
 
-Neon serverless Postgres via the `neon-http` driver (one HTTPS round-trip per query — no pooled socket, which is right for serverless). Three tables (`db/schema.ts`):
+Neon serverless Postgres via the `neon-http` driver (one HTTPS round-trip per query — no pooled socket, which is right for serverless). Four tables (`db/schema.ts`):
 
 - `holder_snapshots` — one row per hourly census: totals, top-10/20/50 %, HHI, buckets, top-20 holders.
 - `x_posts` — buffered X posts, keyed by post id, `source` = `official` | `community`.
 - `kv_cache` — small durable KV (RugCheck persistence, X `since_id` cursors) that survives serverless cold starts.
+- `trades` — **the trade archive.** One row per swap, PK `tx_hash`, `ts` indexed. Written every 15 min by `cron/trades`; read by `/api/trades` to turn the 24h flow figures into a real census. See [The trade archive](#the-trade-archive).
+
+**Storage.** Measured on a 50,000-row scale test with the same shape and indexes: **~480 B/row** (273 B heap + 206 B index — the PK is an 88-char signature, which is most of the index cost). At the current ~180 merged trades/day that is **~31 MB/year, about 6% of Neon's 0.5 GB free tier**. Ten times the volume is ~315 MB/year (59%) — still fits. A *full year sustained* at the busiest day ever observed (~5,900 trades/day) would be ~1.03 GB and would not fit; if volume ever lives there, prune with `delete from trades where ts < now() - interval '90 days'`. Nothing depends on rows older than the 24h window except the coverage-start date — **ATH does not come from this table** (see below), so pruning is safe.
 
 `getDb()` returns **null** when there is no database (`DATABASE_URL` unset, or the e2e gate `WIZARD_DISABLE_DB=1`). Callers must treat null as "no durable store right now" and degrade honestly — never throw.
 
@@ -193,7 +199,7 @@ The e2e run is deterministic by construction: the web server boots with `WIZARD_
 
 Vercel, deployed from `main`. Production env vars are set in the Vercel project. `DATABASE_URL` is injected by the Neon marketplace integration and shows blank in `vercel env pull` because it is marked Sensitive — it is present at runtime.
 
-### The two crons
+### The three crons
 
 Vercel Hobby's cron allowance is too coarse for a 30-minute poll, so scheduling lives in **GitHub Actions**. Each workflow does nothing but `POST` a Bearer-gated route — all the real work, and the paid API key, stay server-side in the app.
 
@@ -201,6 +207,9 @@ Vercel Hobby's cron allowance is too coarse for a 30-minute poll, so scheduling 
 |---|---|---|---|
 | `Holder snapshot (hourly)` | `0 * * * *` | `POST /api/cron/snapshot` | Helius scan → one `holder_snapshots` row |
 | `Prophecy Feed poll (every 30 min)` | `*/30 * * * *` | `POST /api/cron/social` | ~2 X API calls → upsert `x_posts` |
+| `Trade archive (every 15 min)` | `7,22,37,52 * * * *` | `POST /api/cron/trades` | pool trade windows → `trades`, deduped on `tx_hash` |
+
+The trade archive is offset off the quarter-hours on purpose: GitHub's scheduler is most congested (and most delayed) at the top of the hour, where the other two already sit.
 
 Both require, on the repo (Settings → Secrets and variables → Actions):
 
@@ -214,6 +223,7 @@ Both use `concurrency` groups so two runs never overlap, and both fail loudly (`
 ```bash
 gh workflow run "Holder snapshot (hourly)"
 gh workflow run "Prophecy Feed poll (every 30 min)"
+gh workflow run "Trade archive (every 15 min)"
 ```
 
 Or hit the route directly (this spends real API credits):
@@ -245,6 +255,40 @@ Cron failure modes, in likelihood order:
 | Scheduled runs never appear | GitHub schedule lag | see the note below |
 
 > **GitHub's schedule is best-effort, not a guarantee.** Scheduled workflows only fire from the **default branch**, often do not fire at all for the first period after a repo is pushed, and are routinely delayed under platform load (occasionally by 30+ minutes). A missing run right after setup is usually GitHub, not your config — confirm with a `workflow_dispatch` run first, and only then investigate. GitHub also **disables schedules automatically after 60 days of repository inactivity**; if the crons quietly stop months from now, check that first.
+
+### The trade archive
+
+**Why it exists.** GeckoTerminal's `/trades` endpoint is a rolling **window, not a history**: at most **300 trades AND at most 24h**, per pool, whichever binds first. (Measured 2026-07-20: a busy reference pool returned exactly 300 spanning 22 minutes — count-bound; the WIZARD main pool returned 168 spanning exactly 24.0h — time-bound. The older "last ~100 trades" note in this repo was an observation of WIZARD's volume, not the endpoint's limit.) Nothing was persisted, so every 24h figure derived from it was a **lower bound**, which is why unique buyers/sellers were labeled "approximate".
+
+`cron/trades` archives each run's window into `trades`, deduped on `tx_hash`. What lands is exactly what the tape calls one trade: a swap routed across several pools is collapsed by `mergeTrades` to its largest-USD leg *before* insertion, so `pool`/`dex_id` are the swap's dominant venue.
+
+**The honesty rule.** `/api/trades` swaps the window-derived flow for an archive-derived census **only when the archive's oldest row predates the window start**. Until then the approximate numbers and the "~" prefixes stay. There is no in-between: `flowSource` is `"archive"` or `"window"`, and the card reads it directly.
+
+Note the archive reaches full coverage almost immediately, not after 24 hours — the *first* run ingests the upstream's own 24h window, so `since` starts out ~24h in the past. What accrues afterwards is history *beyond* 24h, which is what protects the figures during a volume spike (when the upstream window shrinks to a few hours).
+
+**Verify it:**
+
+```bash
+# rows === distinct tx_hash is the dedupe invariant (tx_hash is the PK, so they cannot diverge)
+psql "$DATABASE_URL" -c "select count(*), count(distinct tx_hash), min(ts) since, max(ts) latest from trades"
+
+# run it twice, spaced apart: the second run should insert ~0 new rows
+curl -s -X POST "$SITE_URL/api/cron/trades" -H "Authorization: Bearer $CRON_SECRET" | jq '{offered,inserted,archive}'
+
+# which source is the flow actually using right now?
+curl -s "$SITE_URL/api/trades" | jq '{flowSource, archiveSince, archiveRows, covered: .flow.fullyCovered}'
+```
+
+The route's response body is a full audit: `offered` / `inserted`, `archive.rows` vs `archive.distinctTxHash` (with `dedupeHolds`), per-pool trade counts and time ranges, and `gap`.
+
+**Two failure signals to watch for in the logs**, both emitted by the route:
+
+| Log line | Meaning | Fix |
+|---|---|---|
+| `COVERAGE GAP — no trades archived between …` | More than 300 trades hit one pool between runs, or the cron was down >24h. **Unrecoverable** — that slice is gone from upstream. | Increase the cadence; see below |
+| `… returned a FULL 300-trade window` | A pool saturated the window; trades may have been missed | Increase the cadence |
+
+The workflow also raises a `::warning::` annotation when the response contains a gap, so it surfaces in the Actions UI without failing the run (the data that *was* fetched is still archived).
 
 ### When a card shows the stale banner
 
@@ -345,6 +389,7 @@ Cadence is set in **three independent places**. Changing one does not change the
 
 `.github/workflows/snapshot.yml` → `cron: "0 * * * *"` (hourly)
 `.github/workflows/social.yml` → `cron: "*/30 * * * *"` (every 30 min)
+`.github/workflows/trades-archive.yml` → `cron: "7,22,37,52 * * * *"` (every 15 min)
 
 ### 2. Server cache TTLs (upstream request rate)
 
@@ -387,6 +432,27 @@ Two calls because the official user id is **pinned** in `config/token.ts` (`X.of
 | `0 */2 * * *` | 12 | **24** |
 
 **Halving the interval doubles the bill.** Before speeding it up, check whether the feed actually moves that fast — a community that posts a few times a day gains nothing from a 15-minute poll.
+
+### Trade archive cadence math
+
+Unlike the X poller, this cron's cadence is not a cost/freshness trade-off — it is a **correctness** constraint. Upstream serves at most 300 trades / 24h per pool, and **whatever falls out of that window before we read it is lost forever.** There is no backfill.
+
+> The rule: **no pool may produce 300 trades between two consecutive runs.**
+
+| | Trades/day (main pool) | Trades/hour | Time to fill 300 |
+|---|---|---|---|
+| Measured 2026-07-20 | 168 | 7 | **~43 hours** |
+| Busiest day observed (2026-03-21, $343K vs $9.8K volume ≈ 35×) | ~5,900 | ~246 | **~73 minutes** |
+
+| Cadence | Trades/interval at that peak | Headroom | Survives GitHub's 30–60 min schedule lag? |
+|---|---|---|---|
+| `0 * * * *` (hourly) | 246 | 1.2× | ✗ — a 30-min delay alone breaches it |
+| `*/30` | 123 | 2.4× | ✓ at 30 min, marginal at 60 |
+| **`*/15` ← current** | **61** | **4.9×** | ✓ — 246 < 300 even at a full hour late |
+
+**Cost** (private repo, 2,000 free Actions minutes/month): 96 runs/day = 2,880 runs/month at ~12s each ≈ **576 min/month**, on top of the ~450 min/month the other two crons use ⇒ **~1,030 of 2,000**.
+
+> ⚠️ **Verify this against real billing.** GitHub bills each job **rounded up to the whole minute**. Under that model these 2,880 runs count as 2,880 minutes and the repo's total would *exceed* the free tier. The ~12s figure above is wall-clock, which is how this repo has always accounted for cron cost — but the two models disagree by 5×. Check Settings → Billing after the first full month. If it bites, drop to `*/30` (still 2.4× headroom at the historical peak) rather than hourly.
 
 ### Kill switch
 
@@ -465,13 +531,16 @@ What is *not* configurable and would need code: non-Solana chains (every source 
 Honest caveats. Several are surfaced in the UI too — the dashboard's whole premise is that it says what it doesn't know.
 
 - **Holder history is not retroactive.** The chart starts at the **first snapshot we ever recorded**, not at token launch — we can only record from the moment the cron started running. Δ7d and Δ30d render `—` until enough history exists. The card carries a "recorded since <date>" banner. A paid backfill is possible but was never budgeted.
-- **ATH is not displayed.** The Wizard's Ledger shows `—` for all-time high: DexScreener's token endpoint does not return it (verified against the recorded response), and inferring it from our own short OHLCV window would be a guess presented as a fact. It stays an em-dash until there is a real source.
+- **ATH is a "high since", not an all-time high.** The Wizard's Ledger now shows **$0.0009331 (2026-05-20)**, computed as the maximum daily high across the main pool's full candle history — 131 candles back to **2026-03-11**, which is the day DexScreener reports the pool was created, so the series spans the pool's entire life. It does **not** span $WIZARD's earlier pump.fun bonding-curve phase (the mint ends in `pump`), which no source we have indexes. The card therefore labels it **"ATH · since 11 Mar 2026"** and never claims an unqualified all-time high. It comes from GeckoTerminal daily OHLCV, *not* from the trade archive — the archive only knows prices since archiving began, so its maximum would be a "high since last Tuesday" masquerading as an ATH.
+  - Prior research (2026-07-17) recorded ATH ≈ **$0.0003529**. **It does not agree** and is treated as superseded: $0.0009331 is corroborated by that day's *hourly* candles (07:00 UTC high 9.3307e-4 on $9.5k volume, $41.7k the next hour, neighbouring hours in the 8e-4 range — a sustained level, not a wick), while $0.0003529 matches no maximum we could reproduce on any of the four pools over any trailing 7/14/30/60/90-day window as of either date. Regression-tested in `test/ath.test.ts`.
+  - `TF_MAP["1d"]` fetches `limit: 1000` (not 180) specifically so this stays true — a truncated window would make a displayed "ATH" silently *drop* over time.
 - **The Coven tab is an approximation.** The `community_id:` search operator is **gated on our X API tier** (candidate A returned HTTP 400 — recorded in `test/fixtures/x-community-A-rejected.json`). The tab therefore runs a cashtag/phrase search (`"smoking wizard" OR $WIZARD -is:retweet`) and shows *mentions*, not the literal community member feed. The UI says so. The decision log is in `lib/sources/x.ts`. If the tier is ever upgraded, switch `X.communityQuery` to the `community_id:` operator.
 - **Mimo's Tribute shows no cumulative total, deliberately.** RugCheck's `creator` (`3ecXTre9…AAkM`) is **not a personal wallet** — it is a pump.fun fee-share *program* account (owner `pfeeUxB6…VojVZ`, independently verified) that splits fees 50/50 between two unidentified wallets, with a third wallet having received 124.65 SOL under an earlier config. The arithmetic reconciles with pump.fun's own display (823.76 vs 824 SOL — 0.03%); **the blocker is attribution, not math.** We can prove fees flowed; we cannot prove *to whom*. So the card ships as an honest link-out showing the fee route structurally, with no money total. The full method is documented in the header of `lib/sources/creator-fees.ts`. Do not add a total unless the recipient wallets are independently identified.
 - **The Origin Scroll's "100% of creator fees flow to Mimo's wallet" is under review.** That line predates the research above, which found the destination to be a fee-share program splitting to unidentified wallets. **The claim is not currently verifiable on-chain** and is being revised separately. Treat it as unverified until that lands.
 - **Concentration is only as good as the labels.** If a new AMM appears that neither DexScreener nor RugCheck labels, its vault counts as a holder and inflates the top-10 figure until someone adds a [manual label](#adding-a-pool-label).
-- **GeckoTerminal is a single point of failure** for the chart, the trade tape and Flow of Mana. Accepted for v1 and documented in the plan's risk table. If it throttles, those three cards go stale together.
-- **Unique buyer/seller counts are approximate** — derived from the last ~100 trades per pool, not a full history scan. Labeled as approximate in the UI.
+- **GeckoTerminal is a single point of failure** for the chart, the trade tape, Flow of Mana and the ATH figure. Accepted for v1 and documented in the plan's risk table. If it throttles, those cards go stale together — though the trade archive now cushions this: the 24h flow figures keep working from our own DB even while the live tape is stale.
+- **Unique buyer/seller counts are approximate *only until the archive covers the window*.** They used to be permanently approximate (read off the upstream's rolling window — which is ≤300 trades / ≤24h per pool, not "~100 trades" as previously documented). Since M10 they are counted from our own `trades` table whenever it spans the full 24h, and the UI drops the "~" and says "counted from our own trade archive · recorded since <date>". When it does *not* span the window — right after a deploy, or after a gap — the "~" and the "approximate" wording come straight back. `flowSource` in `/api/trades` tells you which is live.
+  - **What remains:** the archive is **not retroactive** (same caveat as holder history — it starts at the first cron run), and a gap longer than the upstream window is **unrecoverable**. The route detects and logs both; see [The trade archive](#the-trade-archive).
 - **In-memory caches don't survive cold starts or span instances.** See [cold-start behavior](#cold-start-cache-behavior--known-and-expected).
 - **Vercel Hobby is non-commercial.** Fine for a community dashboard; revisit if referral or affiliate links are ever added.
 - **The Verdict is a rubric, not an oracle.** Every axis shows its inputs and thresholds inline precisely so it can be argued with. The thresholds are judgement calls, and they live in `config/token.ts`.
@@ -482,7 +551,8 @@ Honest caveats. Several are surfaced in the UI too — the dashboard's whole pre
 
 - **Custom domain — not set up.** No domain has been chosen. When you pick one: add it in Vercel → Project → Domains, point DNS at Vercel, then update **`NEXT_PUBLIC_SITE_URL`** (canonical + OG URLs) *and* the GitHub Actions **`SITE_URL`** variable, and redeploy. Entirely optional — the `.vercel.app` URL works fine.
 - **The repo is private.** The footer's GitHub link points at `github.com/Neutize/wizard-tower`, which **404s for visitors until you make the repo public** (Settings → General → Change visibility). Either make it public — appropriate for a "community-built" dashboard whose credibility rests on being auditable — or point `LINKS.github` in `config/token.ts` somewhere else.
-- **Watch the first 24h of crons.** Both workflows are active and a manual dispatch has succeeded end to end (Actions → prod route → Helius → Neon). Confirm the *scheduled* runs land too: `gh run list --limit 20`. See the schedule-lag note in [Operations](#the-two-crons).
+- **Watch the first 24h of crons.** The snapshot and social workflows are active and have succeeded end to end (Actions → prod route → Helius → Neon). Confirm the *scheduled* runs land too: `gh run list --limit 20`. See the schedule-lag note in [Operations](#the-three-crons).
+- **The trade archive workflow is new and has never run on a schedule.** `trades-archive.yml` needs no new secrets (it reuses `SITE_URL` + `CRON_SECRET`), but confirm the first scheduled runs land — a missed window is unrecoverable. Watch for `COVERAGE GAP` in the run logs, and re-check the Actions minutes bill after a full month against the [cadence math](#trade-archive-cadence-math).
 - **Revisit the Origin Scroll copy** once the creator-fee attribution review concludes.
 
 ---

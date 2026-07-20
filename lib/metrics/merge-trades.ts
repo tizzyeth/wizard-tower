@@ -91,12 +91,22 @@ export const FLOW_WINDOW_MS = 86_400_000;
 // ── Merge + dedupe ──────────────────────────────────────────────────────────
 
 /**
+ * The minimum a value needs for dedupe: an identity, a time, and a size to rank
+ * competing legs by. Generic so the SAME merge serves the rendered tape (`Trade`)
+ * and the archive's DB rows, which carry no display fields (M10).
+ */
+export type Mergeable = { txHash: string; ts: number; usd: number };
+
+/**
  * Merge per-pool trade lists into one newest-first tape, deduped by tx_hash.
  * When the same swap appears in multiple pools we keep the largest-USD leg as its
  * representative (dominant venue) so the tape shows each swap exactly once.
+ *
+ * Generic in the element type: passing `Trade[][]` returns `Trade[]`, so the tape's
+ * typing is unchanged, while the archive can merge its own row shape (M10).
  */
-export function mergeTrades(perPool: Trade[][]): Trade[] {
-  const byHash = new Map<string, Trade>();
+export function mergeTrades<T extends Mergeable>(perPool: T[][]): T[] {
+  const byHash = new Map<string, T>();
   for (const list of perPool) {
     for (const trade of list) {
       const existing = byHash.get(trade.txHash);
@@ -112,12 +122,29 @@ export function mergeTrades(perPool: Trade[][]): Trade[] {
 // ── Flow aggregation ─────────────────────────────────────────────────────────
 
 /**
+ * The fields flow aggregation actually reads. A structural subset of `Trade`, so
+ * `Trade[]` still satisfies it — but the archive can aggregate its DB rows without
+ * inventing display fields (poolLabel/quoteSymbol/whale) it does not store (M10).
+ */
+export type FlowInput = {
+  ts: number;
+  side: TradeSide;
+  usd: number;
+  wallet: string;
+};
+
+/**
  * Aggregate 24h buy/sell pressure, net flow, and unique traders from a merged,
  * already-deduped tape. `oldestTradeTs` is computed over the WHOLE tape (not just
- * the window) so the caller can tell whether the ~100/pool cap clipped 24h.
+ * the window) so the caller can tell whether the source window clipped 24h.
+ *
+ * NOTE (M10): when the caller has a durable archive it knows a coverage start that
+ * predates anything in `trades`; `fullyCovered`/`oldestTradeTs` are then overridden
+ * by the caller (see `lib/trades-archive.ts`) — this function only ever reports what
+ * the rows it was handed can prove.
  */
 export function aggregateFlow(
-  trades: Trade[],
+  trades: FlowInput[],
   nowMs: number = Date.now(),
   windowMs: number = FLOW_WINDOW_MS,
 ): FlowStats {
