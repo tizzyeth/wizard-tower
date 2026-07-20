@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "stale": false,
+  "dataAsOf": 1784489867781,
+  "data": {
+    "source": "official",
+    "lastFetchedAt": 1784489867781,
+    "posts": [
+      {
+        "id": "2078848064429658447",
+        "source": "official",
+        "authorHandle": "swizardcore",
+        "authorName": "SMOKING WIZARD",
+        "authorAvatarUrl": null,
+        "text": "hate when i wake up tired like bro wtf did i go to sleep for",
+        "createdAt": 1784403467781,
+        "likes": 252,
+        "reposts": 58,
+        "replies": 15,
+        "media": [],
+        "url": "https://x.com/swizardcore/status/2078848064429658447"
+      },
+      {
+        "id": "2078084285546827777",
+        "source": "official",
+        "authorHandle": "swizardcore",
+        "authorName": "SMOKING WIZARD",
+        "authorAvatarUrl": null,
+        "text": "the tower stands. $WIZARD holders know.",
+        "createdAt": 1784317067781,
+        "likes": 2109,
+        "reposts": 187,
+        "replies": 44,
+        "media": [],
+        "url": "https://x.com/swizardcore/status/2078084285546827777"
+      },
+      {
+        "id": "2077408368352800770",
+        "source": "official",
+        "authorHandle": "swizardcore",
+        "authorName": "SMOKING WIZARD",
+        "authorAvatarUrl": null,
+        "text": "new prophecy incoming soon",
+        "createdAt": 1784230667781,
+        "likes": 1121,
+        "reposts": 96,
+        "replies": 30,
+        "media": [],
+        "url": "https://x.com/swizardcore/status/2077408368352800770"
+      }
+    ]
+  }
+}

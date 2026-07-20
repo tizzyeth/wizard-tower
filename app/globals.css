@@ -1,26 +1,183 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Wizardcore terminal — design tokens per IMPLEMENTATION_PLAN.md §3
+ * Dark-only in v1. Numerals and addresses always JetBrains Mono.
+ *
+ * Palette note (2026-07-18, product owner): the original stock Tailwind
+ * violet read as AI-default. Recolored to the Smoking Wizard's own
+ * materials — amethyst (warmer, red-shifted purple), pipe-smoke mauve,
+ * candlelit plum-black canvas, and an ember accent reserved for the
+ * live indicator (the wizard's lit pipe). Token NAMES are unchanged
+ * (violet/violet-soft) so component classes stay stable.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-jetbrains);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-canvas: #120c15;
+  --color-panel: #1a1321;
+  --color-panel-2: #221a2b;
+  --color-ink: #f4eff6;
+  --color-muted: #9c8ba3;
+  --color-violet: #a863d4;
+  --color-violet-soft: #cfa6ea;
+  --color-green: #86efac;
+  --color-rose: #fb7185;
+  --color-gold: #eab308;
+  --color-ember: #ff9e4a;
+}
+
+::selection {
+  background: rgb(168 99 212 / 0.4);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-violet-soft);
+  outline-offset: 2px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  /* Deep plum orbs in the upper corners; a faint hearth-glow from below —
+     the tower at night, lit by candle and pipe. */
+  background-image:
+    radial-gradient(900px 700px at 88% -10%, rgb(110 36 150 / 0.2), transparent 65%),
+    radial-gradient(1000px 800px at -12% 108%, rgb(110 36 150 / 0.15), transparent 65%),
+    radial-gradient(700px 400px at 55% 112%, rgb(255 130 60 / 0.05), transparent 60%);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+@media (min-width: 768px) {
+  body {
+    background-attachment: fixed;
+  }
+}
+
+/* ── Card frame ─────────────────────────────────────────────── */
+
+.wiz-card {
+  position: relative;
+  background-color: var(--color-panel);
+  border: 1px solid rgb(168 99 212 / 0.32);
+  border-radius: 8px;
+  box-shadow: 0 10px 34px rgb(0 0 0 / 0.45);
+}
+
+.wiz-card-gold {
+  border-color: rgb(234 179 8 / 0.4);
+  border-left: 3px solid var(--color-violet);
+}
+
+.wiz-corner {
+  position: absolute;
+  font-size: 10px;
+  line-height: 1;
+  color: rgb(207 166 234 / 0.55);
+  pointer-events: none;
+  user-select: none;
+}
+.wiz-corner-tl { top: -5px; left: -4px; }
+.wiz-corner-tr { top: -5px; right: -4px; }
+.wiz-corner-bl { bottom: -5px; left: -4px; }
+.wiz-corner-br { bottom: -5px; right: -4px; }
+
+/* Section titles: amethyst → moonglow gradient */
+.wiz-title {
+  background: linear-gradient(90deg, var(--color-violet), var(--color-violet-soft));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Thin rule with centered ✳ under every card title */
+.wiz-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: rgb(168 99 212 / 0.55);
+}
+.wiz-rule::before,
+.wiz-rule::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+}
+.wiz-rule::before {
+  background: linear-gradient(90deg, transparent, rgb(168 99 212 / 0.35));
+}
+.wiz-rule::after {
+  background: linear-gradient(90deg, rgb(168 99 212 / 0.35), transparent);
+}
+
+/* Italic muted captions under charts (PDF style) */
+.wiz-caption {
+  color: var(--color-muted);
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
+/* ── Skeletons ──────────────────────────────────────────────── */
+
+.wiz-skel {
+  border-radius: 4px;
+  background-color: rgb(168 99 212 / 0.08);
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(207 166 234 / 0.1) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: wiz-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes wiz-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -80% 0; }
+}
+
+/* ── Live indicator — the wizard's lit pipe ─────────────────── */
+
+.wiz-live-dot {
+  background-color: var(--color-ember);
+  box-shadow: 0 0 8px rgb(255 158 74 / 0.8);
+  animation: wiz-pulse 2s ease-in-out infinite;
+}
+
+@keyframes wiz-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── Film-grain overlay (desktop only, static — no motion) ────
+   User-toggleable via the cmd+K palette (§3): the palette sets
+   `data-grain="off"` on <html> and persists the choice. Default (no
+   attribute) is on — but only from the md breakpoint up (off on mobile). */
+
+.wiz-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (min-width: 768px) {
+  :root:not([data-grain="off"]) .wiz-grain {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiz-skel,
+  .wiz-live-dot {
+    animation: none;
+  }
 }

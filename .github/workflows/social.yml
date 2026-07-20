@@ -1,0 +1,59 @@
+name: Prophecy Feed poll (every 30 min)
+
+# Scheduled X poller for The Prophecy Feed (IMPLEMENTATION_PLAN.md §5/§6, M6).
+# POSTs the Bearer-gated cron route so new posts land in x_posts. The route spends
+# ~2 X API calls per run (since_id-narrowed) → ~96 calls/day at this cadence
+# (plan's ≲100). The kill switch X_POLL_ENABLED=false (set in Vercel) makes a run a
+# logged no-op with zero calls — the workflow still succeeds.
+#
+# NOTE (M8): no GitHub remote exists yet — this file is correct-by-construction and
+# matches snapshot.yml. Before it can run, M8 must add on the repo:
+#   • Variable  SITE_URL     = the production origin (e.g. https://wizard-tower-iota.vercel.app)
+#   • Secret    CRON_SECRET  = the same value stored in Vercel prod
+# X_BEARER_TOKEN + X_POLL_ENABLED live in Vercel (server-side), NOT here — the
+# workflow only triggers the route; the route holds the paid key.
+# Scheduled workflows only fire from the default branch once the repo is pushed.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes, UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Never overlap two polls; let an in-flight run finish rather than cancel it.
+concurrency:
+  group: social-poll
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/social
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ]; then
+            echo "::error::SITE_URL variable is unset — add it in repo Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET secret is unset — add it in repo Settings → Secrets and variables → Actions → Secrets"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "${SITE_URL%/}/api/cron/social" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "content-type: application/json" \
+            --max-time 90 --retry 2 --retry-delay 15 --retry-all-errors)
+          echo "HTTP status: $code"
+          echo "Response:"; cat /tmp/resp.json; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::social cron returned HTTP $code"
+            exit 1
+          fi

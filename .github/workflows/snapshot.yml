@@ -1,0 +1,55 @@
+name: Holder snapshot (hourly)
+
+# Hourly holder census for the Council of Holders (IMPLEMENTATION_PLAN.md §6).
+# POSTs the Bearer-gated cron route so a fresh row lands in holder_snapshots every
+# hour. History is NOT retroactive — the chart fills from the first run onward.
+#
+# NOTE (M8): no GitHub remote exists yet — this file is correct-by-construction.
+# Before it can run, M8 must add two Actions settings on the repo:
+#   • Variable  SITE_URL     = the production origin (e.g. https://wizard-tower-iota.vercel.app)
+#   • Secret    CRON_SECRET  = the same value stored in Vercel prod (openssl rand -hex 32)
+# Scheduled workflows only fire from the default branch once the repo is pushed.
+
+on:
+  schedule:
+    - cron: "0 * * * *" # top of every hour, UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Never overlap two censuses; let an in-flight run finish rather than cancel it.
+concurrency:
+  group: holder-snapshot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/snapshot
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ]; then
+            echo "::error::SITE_URL variable is unset — add it in repo Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET secret is unset — add it in repo Settings → Secrets and variables → Actions → Secrets"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "${SITE_URL%/}/api/cron/snapshot" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "content-type: application/json" \
+            --max-time 90 --retry 2 --retry-delay 15 --retry-all-errors)
+          echo "HTTP status: $code"
+          echo "Response:"; cat /tmp/resp.json; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::snapshot cron returned HTTP $code"
+            exit 1
+          fi
