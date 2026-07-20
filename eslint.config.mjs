@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent git worktrees live inside the project; their transient build
+    // artifacts make ESLint crash on files that vanish mid-scan.
+    ".claude/worktrees/**",
   ]),
 ]);
 
