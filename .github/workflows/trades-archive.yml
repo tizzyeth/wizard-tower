@@ -1,0 +1,100 @@
+name: Trade archive (every 15 min)
+
+# Trade archive ingester for The Ledger of Deeds / Flow of Mana (M10).
+# POSTs the Bearer-gated cron route so each pool's trade window lands in the
+# `trades` table, deduped on tx_hash. Matches snapshot.yml / social.yml exactly:
+# the workflow only triggers the route; all the work stays server-side.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY EVERY 15 MINUTES — the arithmetic
+#
+# GeckoTerminal's /trades endpoint is a WINDOW, not a history: it serves at most
+# 300 trades AND at most 24h of them, per pool (measured 2026-07-20: a busy
+# reference pool returned exactly 300 spanning 22 minutes; the WIZARD main pool
+# returned 168 spanning exactly 24.0h). Whatever falls out of that window before
+# we read it is lost forever — there is no backfill.
+#
+# So the cadence must satisfy: no pool can produce 300 trades between two runs.
+#
+#   Measured now      main pool 168 trades/24h = 7/h  → 300 trades ≈ 43 HOURS.
+#   Historical peak   2026-03-21 did $343k volume vs $9.8k on 2026-07-19 (~35x).
+#                     At the same $/trade that is ~5,900 trades/day ≈ 246/h
+#                     → a pool fills 300 trades in ~73 MINUTES.
+#
+#   Hourly  → only ~22% headroom at that peak, and GitHub's scheduler is
+#             routinely late (30+ min under load), which alone would breach it.
+#   15 min  → 61 trades/interval at peak = 4.9x headroom, and still safe with a
+#             60-minute scheduler delay (246 < 300). This is the cadence chosen.
+#
+# COST (private repo, 2,000 free Actions minutes/month):
+#   96 runs/day = 2,880 runs/month, each ~12s → ~576 min/month, on top of the
+#   ~450 min/month the snapshot + social crons already use ⇒ ~1,030 of 2,000.
+#   ⚠ GitHub bills each job ROUNDED UP to the whole minute. Under that model
+#   these 2,880 runs count as 2,880 minutes and the repo's total would exceed the
+#   free tier — verify actual usage in Settings → Billing after the first month
+#   and drop to */30 (still ~2.4x headroom at the historical peak) if it bites.
+#
+# The route is self-policing either way: it logs a COVERAGE GAP error if trades
+# were missed between runs, and warns when any pool returns a full 300-trade
+# window. If either shows up in the logs, tighten the cadence.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Requires, on the repo (Settings → Secrets and variables → Actions):
+#   • Variable  SITE_URL     = production origin, e.g. https://wizard-tower-iota.vercel.app
+#   • Secret    CRON_SECRET  = the same value stored in Vercel prod
+# Scheduled workflows only fire from the default branch.
+
+on:
+  schedule:
+    # Offset off :00/:15/:30/:45 deliberately: GitHub's scheduler is most
+    # congested (and most delayed) at the top of the hour, where snapshot.yml and
+    # social.yml already sit. Staggering keeps the three crons from queueing
+    # behind each other.
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Never overlap two ingests; let an in-flight run finish rather than cancel it.
+# (A cancelled run is a missed window, and missed windows are unrecoverable.)
+concurrency:
+  group: trades-archive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/trades
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ]; then
+            echo "::error::SITE_URL variable is unset — add it in repo Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET secret is unset — add it in repo Settings → Secrets and variables → Actions → Secrets"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "${SITE_URL%/}/api/cron/trades" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "content-type: application/json" \
+            --max-time 90 --retry 2 --retry-delay 15 --retry-all-errors)
+          echo "HTTP status: $code"
+          echo "Response:"; cat /tmp/resp.json; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::trades cron returned HTTP $code"
+            exit 1
+          fi
+          # Surface an unrecoverable coverage gap as a workflow annotation — the
+          # run still succeeds (the data we did get is archived), but an operator
+          # needs to see it and consider a faster cadence.
+          if grep -q '"gap":{' /tmp/resp.json; then
+            echo "::warning::Coverage gap detected — trades were missed between runs. See the response body and consider a faster cron cadence."
+          fi

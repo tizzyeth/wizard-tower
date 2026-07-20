@@ -6,7 +6,7 @@ import { AsOf, StaleBanner } from "@/components/wizard/DataStatus";
 import { StatGrid } from "@/components/wizard/StatGrid";
 import type { OhlcvResult } from "@/lib/sources/geckoterminal";
 import type { FlowStats, TradesResult } from "@/lib/sources/gecko-trades";
-import { fmtInt, fmtUsdCompact, fmtUsdTrade } from "@/lib/format";
+import { fmtDateUtc, fmtInt, fmtUsdCompact, fmtUsdTrade } from "@/lib/format";
 import { useOhlcv } from "./useOhlcv";
 import { useTrades } from "./useTrades";
 
@@ -29,6 +29,13 @@ export function FlowOfMana({
   const flow = trades.flow;
   const stale = degraded || trades.stale;
 
+  // M10: true only when the 24h counts came from our own trade archive AND that
+  // archive reaches back past the window start — i.e. an actual census rather than
+  // whatever the upstream window happened to hold. Everything the card claims about
+  // exactness hangs off this one flag, so it is deliberately conservative: a missing
+  // field (old cached payload, e2e fixture, no DB) reads as false.
+  const counted = trades.flowSource === "archive" && flow?.fullyCovered === true;
+
   const daily = useOhlcv({ pool, timeframe: "1d", initial: initialDaily });
   const bars = useMemo(() => {
     const candles = daily.data?.candles ?? [];
@@ -40,7 +47,11 @@ export function FlowOfMana({
       id="flow"
       title="Flow of Mana"
       subtitle="volume & momentum"
-      source="GeckoTerminal · trades + daily OHLCV"
+      source={
+        counted
+          ? "Our trade archive · GeckoTerminal daily OHLCV"
+          : "GeckoTerminal · trades + daily OHLCV"
+      }
       className={className}
     >
       {stale && <StaleBanner dataAsOf={trades.dataAsOf} />}
@@ -55,14 +66,16 @@ export function FlowOfMana({
         items={[
           { label: "24h trades", value: flow ? fmtInt(flow.buyCount + flow.sellCount) : undefined },
           { label: "24h volume", value: flow ? fmtUsdCompact(flow.totalUsd) : undefined },
+          // The "~" is dropped ONLY when the archive covers the whole 24h window;
+          // until then these remain lower bounds and must keep saying so.
           {
             label: "Unique buyers",
-            value: flow ? `~${fmtInt(flow.uniqueBuyers)}` : undefined,
+            value: flow ? `${counted ? "" : "~"}${fmtInt(flow.uniqueBuyers)}` : undefined,
             tone: "green",
           },
           {
             label: "Unique sellers",
-            value: flow ? `~${fmtInt(flow.uniqueSellers)}` : undefined,
+            value: flow ? `${counted ? "" : "~"}${fmtInt(flow.uniqueSellers)}` : undefined,
             tone: "rose",
           },
         ]}
@@ -78,9 +91,7 @@ export function FlowOfMana({
         <VolumeBars bars={bars} loading={daily.loading} />
       </div>
 
-      <p className="wiz-caption mt-4">
-        {approxCaption(flow)}
-      </p>
+      <p className="wiz-caption mt-4">{coverageCaption(trades, flow)}</p>
 
       <AsOf dataAsOf={trades.dataAsOf} stale={stale} />
     </CardFrame>
@@ -216,14 +227,38 @@ function VolumeBars({
 
 // ── Copy ─────────────────────────────────────────────────────────────────────
 
-function approxCaption(flow: FlowStats | null): string {
+const BARS_NOTE =
+  "Daily bars: main pool volume, UTC days; the last bar is today, still filling.";
+
+/**
+ * The card's honesty line (M10). Three genuinely different states, and the copy has
+ * to distinguish them rather than blur them:
+ *
+ *   1. ARCHIVED + COVERED — our own `trades` table spans the full 24h, so these are
+ *      counted, not estimated. Says since when, the way Council of Holders does.
+ *   2. ARCHIVING BUT YOUNG — the archive exists but does not reach back 24h yet
+ *      (the normal state right after deploy). Still approximate, and it says why and
+ *      when that resolves.
+ *   3. NO ARCHIVE — reading the upstream window alone. That window is ≤300 trades
+ *      AND ≤24h per pool (measured; the old "~100 trades" note was wrong), so the
+ *      counts are a floor.
+ */
+function coverageCaption(trades: TradesResult, flow: FlowStats | null): string {
+  const archived = trades.flowSource === "archive";
+  const since = trades.archiveSince;
+
+  if (archived && flow?.fullyCovered) {
+    const sinceLabel = since ? ` Our archive has recorded every trade since ${fmtDateUtc(since)}.` : "";
+    return `Buy/sell pressure, net flow and unique traders are counted from our own trade archive over the full 24h — not estimated.${sinceLabel} ${BARS_NOTE}`;
+  }
+
   const base =
-    "Buy/sell pressure, net flow, and unique traders are approximate — they read the last ~100 trades per pool.";
-  if (!flow) return base;
-  const covers = flow.fullyCovered
-    ? "That window currently reaches past 24h, so the counts are near-complete."
-    : "For this thin token that window sits just under 24h right now, so treat the counts as a floor.";
-  return `${base} ${covers} Daily bars: main pool volume, UTC days; the last bar is today, still filling.`;
+    "Buy/sell pressure, net flow and unique traders are approximate — they read the exchange's rolling window, which holds at most 300 trades and 24h per pool, so the counts are a floor.";
+
+  if (since) {
+    return `${base} We began archiving trades on ${fmtDateUtc(since)}; once that archive spans a full 24h these become exact counts. ${BARS_NOTE}`;
+  }
+  return `${base} ${BARS_NOTE}`;
 }
 
 /** Deterministic "Jul 18" UTC day label for bar tooltips (no hydration drift). */

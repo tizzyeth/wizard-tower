@@ -113,6 +113,10 @@ export function TheWizardsVerdict({
         liquidity: market.data
           ? { totalLiquidityUsd: market.data.totalLiquidityUsd, liqToMcap: market.data.liqToMcap }
           : null,
+        // M10: the trader count now comes from our own trade archive whenever it
+        // covers the full 24h (the swap happens in /api/trades, so this component
+        // needs no new feed). `fullyCovered` then flips true and the axis stops
+        // being partial; `source` only adjusts the caveat wording, never the score.
         activity:
           market.data && trades.flow
             ? {
@@ -120,13 +124,23 @@ export function TheWizardsVerdict({
                 avgDailyVolume30d: baseline,
                 uniqueTraders24h: trades.flow.uniqueTraders,
                 fullyCovered: trades.flow.fullyCovered,
+                source: trades.flowSource,
               }
             : null,
         // M6: real posting cadence from the x_posts buffer (posts/week, 28d, both
         // feeds). Null while the buffer is empty → Community stays "awaiting".
         community: { postingCadence: initialCadence.perWeek },
       }),
-    [checklist, safety.data, holders.data, market.data, trades.flow, baseline, initialCadence.perWeek],
+    [
+      checklist,
+      safety.data,
+      holders.data,
+      market.data,
+      trades.flow,
+      trades.flowSource,
+      baseline,
+      initialCadence.perWeek,
+    ],
   );
 
   const stale =

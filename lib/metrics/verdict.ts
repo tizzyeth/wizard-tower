@@ -20,8 +20,9 @@
  *     roll-up (never scored as zero). Community is always awaiting-data in M7 (the
  *     X feed is M6, blocked on a key).
  *   - An axis scored off incomplete inputs is flagged `partial` (Distribution: a
- *     top-20 holder window until M4; Activity: the ~100-trades-per-pool cap can
- *     clip the 24h window). The score still counts; the caveat is shown.
+ *     top-20 holder window until M4; Activity: the exchange's rolling ≤300-trade /
+ *     ≤24h window can clip 24h, until M10's trade archive covers it). The score
+ *     still counts; the caveat is shown.
  *
  * The overall is labeled with how many axes contributed ("4 of 5 wards speak").
  *
@@ -157,8 +158,18 @@ export type VerdictInputs = {
     /** Trailing 30d average DAILY volume (the baseline the 24h figure is judged against). */
     avgDailyVolume30d: number | null;
     uniqueTraders24h: number | null;
-    /** false when the ~100-trades/pool cap clipped the 24h window → counts are a floor. */
+    /**
+     * False when the trader count is a floor rather than a census — i.e. the source
+     * did not demonstrably span the full 24h. True once M10's trade archive covers
+     * the window, which flips this axis from `partial` to fully scored.
+     */
     fullyCovered: boolean;
+    /**
+     * Where the trader count came from (M10). Only changes the CAVEAT WORDING, never
+     * the score: "archive" = counted from our own `trades` table, "window" = derived
+     * from the exchange's rolling ≤300-trade/≤24h window.
+     */
+    source?: "archive" | "window";
   } | null;
   /**
    * Community posting cadence — posts per week across both feeds over 28d, from the
@@ -359,6 +370,12 @@ function activityAxis(a: VerdictInputs["activity"]): VerdictAxis {
           direction: "higher",
           display: (v) => fmtInt(v),
           threshold: `≥ ${fmtInt(V.uniqueTraders24h.pass)}`,
+          // M10: name the provenance inline, so a reader can tell a counted census
+          // from a floor without decoding the axis-level asterisk.
+          note:
+            a.source === "archive" && a.fullyCovered
+              ? "counted from our trade archive"
+              : undefined,
         }),
       ]
     : [];
@@ -367,9 +384,11 @@ function activityAxis(a: VerdictInputs["activity"]): VerdictAxis {
     label: "Activity",
     subtitle: "volume trend · unique traders",
     inputs,
-    // Approximate when the ~100-trades/pool cap clipped the 24h window.
+    // Partial while the trader count is a floor. M10's archive clears this once it
+    // spans a full 24h — the axis then scores in full, like Distribution did in M4.
     forcePartial: Boolean(a) && !a!.fullyCovered,
-    partialNote: "Reads the last ~100 trades per pool; treat the 24h counts as a floor.",
+    partialNote:
+      "Trader counts read the exchange's rolling window (≤300 trades, ≤24h per pool), so treat them as a floor until our trade archive spans a full day.",
     awaitingNote: "The flow of mana is not yet gauged.",
   });
 }
