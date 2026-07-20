@@ -54,6 +54,16 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     await expect(feed).toContainText(/every mention of/i); // the approximation note
     await expect(feed).toContainText("@libretaxservice");
 
+    // The header's freshness dot (lib/health.ts). This run sets WIZARD_DISABLE_DB=1,
+    // so freshness is `unknown` — which must render as the ordinary live state. An
+    // indicator that warns when it cannot measure anything is one people learn to
+    // ignore, and it would make this suite non-deterministic besides.
+    // (`banner`, not `header` — every CardFrame renders a <header> too, but those
+    // are scoped to a <section> so only the site header carries the landmark role.)
+    const banner = page.getByRole("banner");
+    await expect(banner).toContainText(/\blive\b/i);
+    await expect(banner).not.toContainText(/\bstale\b/i);
+
     expect(liveRequests, "browser made no live upstream requests (incl. X)").toEqual([]);
     expect(consoleErrors, "no console errors on load").toEqual([]);
   });

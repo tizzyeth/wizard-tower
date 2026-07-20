@@ -1,0 +1,110 @@
+name: Cron failure → issue
+
+# Shared failure handler for the two scheduled crons (snapshot.yml, social.yml).
+# On a failed run it opens a GitHub issue naming the workflow, the time and the run
+# URL — or, if that issue is already open, comments on it instead. The dashboard's
+# data pipeline is invisible when it breaks; this makes a break leave a mark in the
+# repo that survives a missed email.
+#
+# WHY A REUSABLE WORKFLOW (`workflow_call`) rather than a failure job copy-pasted
+# into each cron, or a single `workflow_run` listener:
+#   • vs. copy-paste — the issue logic (dedupe, label bootstrap, body) exists ONCE.
+#     Two copies of a thing that only runs when something is already broken is two
+#     copies that drift, and the drift is discovered at the worst moment.
+#   • vs. `workflow_run` — that trigger only fires from the default branch, runs in
+#     a detached context that has to look the failed run back up through the API,
+#     and adds a second thing that can itself silently stop firing. Called inline,
+#     the alert shares the failed run's own context: `github.run_id` IS the run that
+#     just failed, so the link cannot point at the wrong place.
+#
+# Known blind spot, covered elsewhere by design: this only fires when a run FAILS.
+# A cron that stops being scheduled (GitHub disables schedules after 60 days of repo
+# inactivity) produces no run, therefore no failure, therefore no issue. That case is
+# caught from the data side by GET /api/health + lib/health.ts.
+#
+# PERMISSIONS: a reusable workflow cannot grant itself more than the caller has, so
+# each calling job must declare `issues: write` (see snapshot.yml / social.yml).
+
+on:
+  workflow_call:
+    inputs:
+      workflow-name:
+        description: Display name of the cron workflow that failed.
+        required: true
+        type: string
+      route:
+        description: The cron route it POSTs, for the issue body.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.workflow-name }}
+          ROUTE: ${{ inputs.route }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+          LABEL: cron-failure
+        run: |
+          set -euo pipefail
+
+          TITLE="Cron failure: ${WORKFLOW}"
+          WHEN="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          export TITLE
+
+          # Bootstrap the label so a fresh clone of this template works with no
+          # manual setup. Already-exists is the normal case, not an error.
+          gh label create "$LABEL" --repo "$REPO" \
+            --color "B60205" \
+            --description "A scheduled data cron failed" >/dev/null 2>&1 || true
+
+          BODY="$(cat <<MD
+          **\`${WORKFLOW}\`** failed at **${WHEN}** (attempt ${ATTEMPT}).
+
+          - Failed run: ${RUN_URL}
+          - Route: \`POST ${ROUTE}\`
+
+          The dashboard keeps serving, but the data behind it stops advancing until
+          this is fixed — the holder chart stops growing, or the feed goes stale.
+
+          **Triage, in likelihood order** (README → Operations → The two crons):
+
+          | HTTP in the run log | Cause | Fix |
+          |---|---|---|
+          | 401 | \`CRON_SECRET\` differs between Vercel and Actions | rotate both together |
+          | 503 \`database unavailable\` | \`DATABASE_URL\` missing/rotated in Vercel | re-link Neon, redeploy |
+          | 502 from snapshot | Helius scan failed (key, quota, timeout) | check key + Helius quota |
+          | \`SITE_URL variable is unset\` | Actions Variable missing | add it under Actions → Variables |
+
+          Current freshness, independent of Actions: \`/api/health\`.
+
+          This issue is reused for repeat failures of this workflow — new occurrences
+          arrive as comments, not as new issues. **Close it once the cron is green
+          again**; the next failure after that opens a fresh one.
+          MD
+          )"
+
+          EXISTING="$(gh issue list --repo "$REPO" --state open --label "$LABEL" \
+            --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')"
+
+          if [ -n "$EXISTING" ]; then
+            echo "Existing open issue #${EXISTING} — commenting instead of opening a duplicate."
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+          else
+            echo "No open issue for '${TITLE}' — creating one."
+            gh issue create --repo "$REPO" --title "$TITLE" --label "$LABEL" --body "$BODY"
+          fi

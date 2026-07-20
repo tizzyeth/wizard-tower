@@ -19,6 +19,7 @@ import { getOhlcv, DEFAULT_TIMEFRAME } from "@/lib/sources/geckoterminal";
 import { activePoolsFromMarket, getTrades } from "@/lib/sources/gecko-trades";
 import { getSafety } from "@/lib/sources/rugcheck";
 import { getHolders } from "@/lib/holders";
+import { getHealth } from "@/lib/health";
 import { getSocial, getPostingCadence } from "@/lib/social";
 import { LINKS, TOKEN } from "@/config/token";
 
@@ -87,17 +88,21 @@ export default async function Home({
   // Seed both Prophecy Feed tabs from our DB (filled by the 30-min social poller).
   // Reads DB only — no X API on a page load. Also read posting cadence for the
   // Verdict's Community axis (M6 hookup) so the axis joins the roll-up.
-  const [initialOfficial, initialCommunity, cadence] = await Promise.all([
+  // Cron freshness for the header's live dot (lib/health.ts). Joins this Promise.all
+  // so it costs no extra serial round-trip, and it can never reject or block the
+  // render — an unreadable database yields an `unknown` report, not a throw.
+  const [initialOfficial, initialCommunity, cadence, health] = await Promise.all([
     getSocial("official"),
     getSocial("community"),
     getPostingCadence(),
+    getHealth(),
   ]);
 
   return (
     <>
       <GrainOverlay />
       <CommandPalette />
-      <SiteHeader initialMarket={initialMarket} />
+      <SiteHeader initialMarket={initialMarket} health={health} />
 
       <main
         id="top"

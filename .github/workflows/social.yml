@@ -57,3 +57,17 @@ jobs:
             echo "::error::social cron returned HTTP $code"
             exit 1
           fi
+
+  # Make the failure visible in the repo, not just in an email that gets filtered.
+  # `issues: write` is declared HERE because a called workflow can only ever narrow
+  # the caller's permissions, never widen them.
+  alert:
+    needs: poll
+    if: failure()
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/cron-failure-issue.yml
+    with:
+      workflow-name: Prophecy Feed poll (every 30 min)
+      route: /api/cron/social
