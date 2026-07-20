@@ -6,7 +6,10 @@ import { StatGrid, type StatItem } from "@/components/wizard/StatGrid";
 import { AsOf, AwaitingReading, StaleBanner } from "@/components/wizard/DataStatus";
 import type { MarketResult } from "@/lib/sources/dexscreener";
 import type { HoldersResult } from "@/lib/holders";
+import type { Ath } from "@/lib/metrics/ath";
 import {
+  fmtDateUtc,
+  fmtMonthUtc,
   fmtInt,
   fmtPct,
   fmtPrice,
@@ -40,10 +43,18 @@ function ChangeChip({ label, value }: { label: string; value: number | null }) {
 export function WizardsLedger({
   initial,
   initialHolders,
+  ath,
   className = "",
 }: {
   initial: MarketResult;
   initialHolders: HoldersResult;
+  /**
+   * ATH computed server-side from the main pool's full daily series (M10). Slow-
+   * moving by nature, so it is a static seed rather than a polled query — a new
+   * high only appears on the next page load, which for an all-time extreme is fine.
+   * Null when the series is unavailable → the card keeps its honest em-dash.
+   */
+  ath?: Ath | null;
   className?: string;
 }) {
   const { result, degraded } = useMarket(initial);
@@ -86,15 +97,27 @@ export function WizardsLedger({
             <StatGrid
               cols={4}
               className="flex-1"
-              items={ledgerStats(d, holders.data?.totalHolders ?? null)}
+              items={ledgerStats(d, holders.data?.totalHolders ?? null, ath ?? null)}
             />
           </div>
 
           <p className="wiz-caption mt-4">
-            Holders are our own hourly on-chain census. All-time high still awaits a
-            source — DexScreener’s token feed does not carry it. Liquidity and volume
-            sum the {d.activePoolCount} active pools; price follows the{" "}
-            {d.primaryDexLabel} main pool.
+            Holders are our own hourly on-chain census.{" "}
+            {ath ? (
+              <>
+                The high is the largest daily high in the {d.primaryDexLabel} main
+                pool’s candle history, which begins {fmtDateUtc(ath.sinceMs)} — so it
+                is labelled “since” rather than all-time: $WIZARD launched on pump.fun
+                and its bonding-curve phase predates the pool we can read.
+              </>
+            ) : (
+              <>
+                All-time high still awaits a source — DexScreener’s token feed does not
+                carry it and the candle history is unavailable right now.
+              </>
+            )}{" "}
+            Liquidity and volume sum the {d.activePoolCount} active pools; price
+            follows the {d.primaryDexLabel} main pool.
           </p>
 
           <AsOf dataAsOf={result.dataAsOf} stale={stale} />
@@ -111,15 +134,25 @@ function initialSymbol(d: NonNullable<MarketResult["data"]>): string {
 function ledgerStats(
   d: NonNullable<MarketResult["data"]>,
   totalHolders: number | null,
+  ath: Ath | null,
 ): StatItem[] {
   return [
     { label: "Market cap", value: fmtUsdCompact(d.marketCap) },
     { label: "FDV", value: fmtUsdCompact(d.fdv) },
     { label: "Liquidity", value: fmtUsdCompact(d.totalLiquidityUsd) },
     { label: "24h volume", value: fmtUsdCompact(d.volumeH24Usd) },
-    // ATH has no source yet — DexScreener's token endpoint does not return it,
-    // so this stays an honest em-dash rather than a computed guess.
-    { label: "ATH", value: "—", tone: "muted" },
+    // M10: the highest daily high in the main pool's candle history. The label
+    // carries the coverage start because that history begins at the POOL's
+    // creation, not the token's pump.fun launch — so this is provably a
+    // "high since <date>", never an unqualified all-time high. Still "—" when
+    // the daily series is unavailable: a wrong ATH is worse than none.
+    // Month precision in the label, exact date in the caption: at 390px the full
+    // "11 Mar 2026" wrapped this label to two lines, which knocked its value out of
+    // alignment with "Holders" beside it. Month is enough to stop the figure reading
+    // as an absolute all-time high, which is the caveat's whole job.
+    ath == null
+      ? { label: "ATH", value: "—", tone: "muted" }
+      : { label: `ATH since ${fmtMonthUtc(ath.sinceMs)}`, value: fmtPrice(ath.priceUsd) },
     // Gross distinct-owner count from the latest census (matches Solscan). "—"
     // until the first snapshot lands; history is not retroactive.
     totalHolders == null

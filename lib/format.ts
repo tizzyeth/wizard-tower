@@ -144,6 +144,17 @@ export function fmtDateUtc(tsMs: number | null | undefined): string {
   return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/**
+ * Month + year (e.g. "Mar 2026") in UTC — for coverage captions that must stay on
+ * ONE line inside a narrow stat label (the ATH "since" qualifier). Same determinism
+ * guarantee as fmtDateUtc; the exact day is shown in the card's caption instead.
+ */
+export function fmtMonthUtc(tsMs: number | null | undefined): string {
+  if (tsMs == null || !Number.isFinite(tsMs)) return EM_DASH;
+  const d = new Date(tsMs);
+  return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
 /** Compact date + time (e.g. "19 Jul 14:00 UTC") for chart-point tooltips. */
 export function fmtDateTimeUtc(tsMs: number | null | undefined): string {
   if (tsMs == null || !Number.isFinite(tsMs)) return EM_DASH;

@@ -6,13 +6,19 @@
  * dashboard uses — no hardcoded pool list. The 30s per-pool cache, shared rate
  * budget, tx_hash dedupe, and stale-while-revalidate all live in the source lib.
  *
+ * M10: the response is composed by `getTradesWithArchive`, so the 24h `flow` this
+ * route returns is archive-backed (an actual census) whenever our `trades` table
+ * covers the full window, and the window-derived approximation otherwise. Because
+ * the swap happens here, the cards' 30s poll gets the better data automatically.
+ *
  * Dev-only: `?fault=1` injects an upstream failure to prove the stale banner
  * renders the last-good tape. It is ignored in production.
  */
 
 import type { NextRequest } from "next/server";
 import { getMarket } from "@/lib/sources/dexscreener";
-import { activePoolsFromMarket, getTrades } from "@/lib/sources/gecko-trades";
+import { activePoolsFromMarket } from "@/lib/sources/gecko-trades";
+import { getTradesWithArchive } from "@/lib/trades-archive";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +32,10 @@ export async function GET(request: NextRequest) {
   const market = await getMarket();
   const pools = activePoolsFromMarket(market);
 
-  const result = await getTrades({
+  // M10: the archive layer replaces `flow` with a real 24h census once our own
+  // `trades` table covers the whole window; until then the live window's own
+  // approximate flow stands. The tape itself is unchanged either way.
+  const result = await getTradesWithArchive({
     pools,
     forceRefresh: fault,
     simulateFailure: fault,

@@ -4,7 +4,7 @@
  *   GET https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/trades
  *   → data[].attributes: block_timestamp, kind, tx_hash, tx_from_address,
  *     from/to_token_address, from/to_token_amount, price_*_in_usd, volume_in_usd
- *   (returns the last ~100 trades for the pool)
+ *   (a WINDOW, not a history: ≤300 trades AND ≤24h old — see UPSTREAM_WINDOW)
  *
  * Same house style as `lib/sources/geckoterminal.ts` (one lib per provider, §5
  * "Implementation rules"):
@@ -45,8 +45,25 @@ const BASE = "https://api.geckoterminal.com/api/v2/networks/solana/pools";
 const CACHE_TTL_MS = 30_000;
 /** Abort a slow upstream so it can never hang an SSR render. */
 const FETCH_TIMEOUT_MS = 6_000;
-/** Cap the tape payload; the merged set is already bounded (~100/pool, deduped). */
+/**
+ * Cap the tape payload. The merged set is already bounded by what upstream serves
+ * (see UPSTREAM_WINDOW below), but the rendered tape needs far less than that.
+ * The archive cron opts out of the cap via `cap: Infinity` (M10).
+ */
 const RENDER_CAP = 120;
+
+/**
+ * What one `/trades` call can actually return, per pool: at most 300 trades AND
+ * only from the past 24 hours — whichever binds first. Measured 2026-07-20: a busy
+ * reference pool returned exactly 300 spanning 22 minutes (count-bound), while the
+ * WIZARD main pool returned 168 spanning exactly 24.0h (time-bound).
+ *
+ * This corrects the earlier "last ~100 trades" note in this file: 100 was an
+ * observation of WIZARD's volume at the time, not the endpoint's limit. Both bounds
+ * matter to the M10 archive cron — it must run often enough that no pool can
+ * produce 300 trades between runs, and it can never recover a gap older than 24h.
+ */
+export const UPSTREAM_WINDOW = { maxTrades: 300, maxAgeMs: 86_400_000 } as const;
 
 // ── Boundary validation (zod) ───────────────────────────────────────────────
 // Amounts and prices arrive as strings; coerce safely and validate finiteness in
@@ -252,6 +269,20 @@ export type TradesResult = {
   poolsFailed: string[];
   /** Human reason, present on stale/error for logs and the banner sub-text. */
   error?: string;
+
+  // ── Archive overlay (M10) — populated by `lib/trades-archive.ts`, never here.
+  // Optional so this source stays DB-free and so an older cached/fixture payload
+  // (e2e) simply reads as "no archive", falling back to the window's own honesty.
+  /**
+   * Where `flow` was computed from. "window" = the ≤300-trade/≤24h upstream window
+   * (counts are a floor → the UI says "approximate"). "archive" = our own durable
+   * trade table, which covers the full 24h → the counts are an actual census.
+   */
+  flowSource?: "window" | "archive";
+  /** Oldest trade the archive holds (ms) — the "recorded since" date. */
+  archiveSince?: number | null;
+  /** Total rows in the archive — context for the coverage note. */
+  archiveRows?: number;
 };
 
 export type GetTradesOptions = {
@@ -260,6 +291,12 @@ export type GetTradesOptions = {
   simulateFailure?: boolean;
   /** Injectable clock for deterministic flow windows in tests. */
   nowMs?: number;
+  /**
+   * Max trades to return in `trades`. Defaults to the render cap; the archive cron
+   * passes `Infinity` because it must persist every merged swap, not just the
+   * newest page of them (M10).
+   */
+  cap?: number;
 };
 
 /**
@@ -269,7 +306,12 @@ export type GetTradesOptions = {
  * flagged stale, or an honest empty tape. Never throws for a routine failure.
  */
 export async function getTrades(options: GetTradesOptions): Promise<TradesResult> {
-  const { forceRefresh = false, simulateFailure = false, nowMs = Date.now() } = options;
+  const {
+    forceRefresh = false,
+    simulateFailure = false,
+    nowMs = Date.now(),
+    cap = RENDER_CAP,
+  } = options;
   const pools = options.pools.length > 0 ? options.pools : [FALLBACK_POOL];
 
   const settled = await Promise.all(
@@ -303,7 +345,7 @@ export async function getTrades(options: GetTradesOptions): Promise<TradesResult
     ok,
     stale: anyStale || (!ok && poolsFailed.length > 0),
     dataAsOf,
-    trades: merged.slice(0, RENDER_CAP),
+    trades: Number.isFinite(cap) ? merged.slice(0, cap) : merged,
     totalMerged: merged.length,
     flow,
     pools,

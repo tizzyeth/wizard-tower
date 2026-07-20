@@ -179,6 +179,57 @@ describe("computeVerdict — warn/fail bands", () => {
     expect(v.axes.find((a) => a.key === "activity")!.partial).toBe(false);
   });
 
+  // ── M10: the trade archive as the Activity axis's trader-count source ──────
+
+  it("credits the archive inline once it covers the window", () => {
+    const v = computeVerdict(
+      liveInputs({
+        activity: {
+          volume24hUsd: 1000,
+          avgDailyVolume30d: 1000,
+          uniqueTraders24h: 50,
+          fullyCovered: true,
+          source: "archive",
+        },
+      }),
+    );
+    const axis = v.axes.find((a) => a.key === "activity")!;
+    const traders = axis.inputs.find((i) => i.key === "uniqueTraders")!;
+    expect(axis.partial).toBe(false);
+    expect(traders.note).toBe("counted from our trade archive");
+  });
+
+  it("a young archive is still a floor — no credit, caveat intact", () => {
+    // The archive exists but does not yet span 24h. It must NOT claim a census.
+    const v = computeVerdict(
+      liveInputs({
+        activity: {
+          volume24hUsd: 1000,
+          avgDailyVolume30d: 1000,
+          uniqueTraders24h: 50,
+          fullyCovered: false,
+          source: "archive",
+        },
+      }),
+    );
+    const axis = v.axes.find((a) => a.key === "activity")!;
+    expect(axis.partial).toBe(true);
+    expect(axis.inputs.find((i) => i.key === "uniqueTraders")!.note).toBeUndefined();
+    expect(axis.note).toMatch(/floor until our trade archive/);
+  });
+
+  it("provenance changes the caveat, never the score", () => {
+    const inputs = { volume24hUsd: 1000, avgDailyVolume30d: 1000, uniqueTraders24h: 50 };
+    const windowed = computeVerdict(
+      liveInputs({ activity: { ...inputs, fullyCovered: true, source: "window" } }),
+    ).axes.find((a) => a.key === "activity")!;
+    const archived = computeVerdict(
+      liveInputs({ activity: { ...inputs, fullyCovered: true, source: "archive" } }),
+    ).axes.find((a) => a.key === "activity")!;
+    expect(archived.score).toBe(windowed.score);
+    expect(archived.band).toBe(windowed.band);
+  });
+
   it("a broken ward drags Safety below strong", () => {
     // Freeze authority still held → that input fails; Safety = (100+0+100+100)/4 = 75 = pass boundary.
     const held = evaluateChecklist(
