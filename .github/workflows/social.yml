@@ -1,4 +1,4 @@
-name: Prophecy Feed poll (every 30 min)
+name: Prophecy Feed poll (manual)
 
 # Scheduled X poller for The Prophecy Feed (IMPLEMENTATION_PLAN.md §5/§6, M6).
 # POSTs the Bearer-gated cron route so new posts land in x_posts. The route spends
@@ -15,9 +15,7 @@ name: Prophecy Feed poll (every 30 min)
 # Scheduled workflows only fire from the default branch once the repo is pushed.
 
 on:
-  schedule:
-    - cron: "*/30 * * * *" # every 30 minutes, UTC
-  workflow_dispatch: {} # allow manual runs from the Actions tab
+  workflow_dispatch: {} # manual only — the schedule lives in data-crons.yml
 
 # Never overlap two polls; let an in-flight run finish rather than cancel it.
 concurrency:

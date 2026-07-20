@@ -12,6 +12,7 @@
  */
 
 import type { NextRequest } from "next/server";
+import { desc } from "drizzle-orm";
 import { getDb, dbAvailable } from "@/db";
 import { holderSnapshots } from "@/db/schema";
 import { scanHolders } from "@/lib/sources/helius";
@@ -30,6 +31,32 @@ export const maxDuration = 60;
 
 function unauthorized() {
   return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+}
+
+/**
+ * Minimum gap between stored censuses. 50 rather than 60 minutes so a run that
+ * arrives a little early (or a scheduler that fires at :58) still writes its hour
+ * instead of silently deferring it to the next one.
+ */
+const MIN_SNAPSHOT_INTERVAL_MS = 50 * 60_000;
+
+/** Age of the newest stored snapshot, or null if there is none / the DB is unreadable. */
+async function msSinceLastSnapshot(): Promise<number | null> {
+  try {
+    const db = getDb();
+    if (!db) return null;
+
+    const rows = await db
+      .select({ ts: holderSnapshots.ts })
+      .from(holderSnapshots)
+      .orderBy(desc(holderSnapshots.ts))
+      .limit(1);
+    const newest = rows[0]?.ts;
+    return newest ? Date.now() - new Date(newest).getTime() : null;
+  } catch {
+    // Never let the guard block a census — if we cannot read the table, scan.
+    return null;
+  }
 }
 
 /**
@@ -73,6 +100,37 @@ export async function POST(request: NextRequest) {
       { ok: false, error: "database unavailable" },
       { status: 503 },
     );
+  }
+
+  // The census is nominally hourly, but the shared data cron fires every 30 min
+  // (one Actions job for all three routes — see .github/workflows/data-crons.yml
+  // and the free-tier arithmetic there). Rather than let the cadence drift to
+  // 30 min — which would make "hourly" a lie in a dozen places and double the
+  // stored rows for no new information — the route itself enforces the interval.
+  //
+  // Server-side and data-driven, NOT minute-gated in YAML: GitHub's scheduler is
+  // routinely 30+ minutes late, so "only run at :00" would skip whole hours. This
+  // asks the only question that matters — how old is the newest row — and so
+  // self-corrects after any delay or outage. `?force=1` overrides it for manual
+  // dispatches and debugging.
+  const force = new URL(request.url).searchParams.get("force") === "1";
+  if (!force) {
+    const sinceLast = await msSinceLastSnapshot();
+    if (sinceLast !== null && sinceLast < MIN_SNAPSHOT_INTERVAL_MS) {
+      const ageMin = Math.round(sinceLast / 60_000);
+      console.log(
+        `[cron/snapshot] skipped — newest snapshot is ${ageMin}m old (min interval ${
+          MIN_SNAPSHOT_INTERVAL_MS / 60_000
+        }m). Pass ?force=1 to override.`,
+      );
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "recent snapshot exists",
+        newestAgeMinutes: ageMin,
+        minIntervalMinutes: MIN_SNAPSHOT_INTERVAL_MS / 60_000,
+      });
+    }
   }
 
   const startedAt = Date.now();

@@ -1,4 +1,4 @@
-name: Trade archive (every 15 min)
+name: Trade archive (manual)
 
 # Trade archive ingester for The Ledger of Deeds / Flow of Mana (M10).
 # POSTs the Bearer-gated cron route so each pool's trade window lands in the
@@ -45,13 +45,7 @@ name: Trade archive (every 15 min)
 # Scheduled workflows only fire from the default branch.
 
 on:
-  schedule:
-    # Offset off :00/:15/:30/:45 deliberately: GitHub's scheduler is most
-    # congested (and most delayed) at the top of the hour, where snapshot.yml and
-    # social.yml already sit. Staggering keeps the three crons from queueing
-    # behind each other.
-    - cron: "7,22,37,52 * * * *"
-  workflow_dispatch: {} # allow manual runs from the Actions tab
+  workflow_dispatch: {} # manual only — the schedule lives in data-crons.yml
 
 # Never overlap two ingests; let an in-flight run finish rather than cancel it.
 # (A cancelled run is a missed window, and missed windows are unrecoverable.)
