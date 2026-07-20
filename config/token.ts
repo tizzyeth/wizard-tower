@@ -150,8 +150,9 @@ export const LINKS = {
   tiktok: "https://www.tiktok.com/@mimofrl",
   creator: "https://mimofr.com",
   /**
-   * The source repository. NOTE: currently PRIVATE — this footer link 404s for
-   * visitors until the repo is made public (README → "What's still on you").
+   * The source repository — PRIVATE, so it is deliberately not linked anywhere
+   * in the UI (a 404 for visitors). Kept here for operators; re-add the footer
+   * link in SiteFooter if the repo is ever made public.
    */
   github: "https://github.com/Neutize/wizard-tower",
   buy: {
