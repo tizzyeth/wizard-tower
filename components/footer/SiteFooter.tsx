@@ -1,5 +1,3 @@
-import { LINKS } from "@/config/token";
-
 const SOURCES = ["DexScreener", "GeckoTerminal", "Helius", "RugCheck", "X"] as const;
 
 export function SiteFooter() {
@@ -21,16 +19,6 @@ export function SiteFooter() {
         <p className="mt-3 text-xs text-muted">
           community-built · unofficial · informational only · not financial advice ·
           DYOR
-        </p>
-        <p className="mt-3 text-xs">
-          <a
-            href={LINKS.github}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-violet-soft transition-colors hover:text-ink"
-          >
-            GitHub
-          </a>
         </p>
       </div>
     </footer>
