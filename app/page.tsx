@@ -1,8 +1,6 @@
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { GrainOverlay } from "@/components/wizard/GrainOverlay";
 import { CommandPalette } from "@/components/wizard/CommandPalette";
-import { Skeleton } from "@/components/wizard/Skeleton";
-import { StatHero } from "@/components/wizard/StatHero";
 import { SiteFooter } from "@/components/footer/SiteFooter";
 import { SiteHeader } from "@/components/header/SiteHeader";
 import { WizardsLedger } from "@/components/cards/WizardsLedger";
@@ -14,7 +12,9 @@ import { WardsAndProtections } from "@/components/cards/WardsAndProtections";
 import { TheWizardsVerdict } from "@/components/cards/TheWizardsVerdict";
 import { TheProphecyFeed } from "@/components/cards/TheProphecyFeed";
 import { CouncilOfHolders } from "@/components/cards/CouncilOfHolders";
+import { MimosTribute } from "@/components/cards/MimosTribute";
 import { getMarket } from "@/lib/sources/dexscreener";
+import { getCreatorFeeRoute } from "@/lib/sources/creator-fees";
 import { getOhlcv, DEFAULT_TIMEFRAME } from "@/lib/sources/geckoterminal";
 import { activePoolsFromMarket, getTrades } from "@/lib/sources/gecko-trades";
 import { getSafety } from "@/lib/sources/rugcheck";
@@ -25,17 +25,6 @@ import { LINKS, TOKEN } from "@/config/token";
 // Live market data: fetch the initial snapshot on the server so the page paints
 // real numbers with no skeleton flash; the cards keep it live from there (30s).
 export const dynamic = "force-dynamic";
-
-function ChartSkeleton({ className = "h-64" }: { className?: string }) {
-  return (
-    <div className={`relative overflow-hidden rounded ${className}`}>
-      <Skeleton className="absolute inset-0" />
-      <p className="wiz-caption absolute inset-x-0 bottom-3 text-center">
-        The crystal ball is warming — live data arrives soon.
-      </p>
-    </div>
-  );
-}
 
 export default async function Home({
   searchParams,
@@ -84,6 +73,12 @@ export default async function Home({
   const initialSafety = await getSafety(
     fault ? { simulateFailure: true, forceRefresh: true } : undefined,
   );
+  // Mimo's Tribute (M9): resolve the creator-fee route from the creator account
+  // RugCheck reports — nothing about the route is hardcoded. Structural data only
+  // (who the fee splits between), never a money total; see the reasoning in
+  // lib/sources/creator-fees.ts. Degrades to the static explainer if unreadable.
+  const creatorFeeRoute = await getCreatorFeeRoute(initialSafety.data?.creator ?? null);
+
   // Seed the Council of Holders from the latest snapshot in our DB (hourly cron).
   // Reads DB only — null (no snapshot yet / no DB) renders the honest empty state.
   const initialHolders = await getHolders();
@@ -102,7 +97,7 @@ export default async function Home({
     <>
       <GrainOverlay />
       <CommandPalette />
-      <SiteHeader />
+      <SiteHeader initialMarket={initialMarket} />
 
       <main
         id="top"
@@ -114,8 +109,12 @@ export default async function Home({
           The Wizard’s Tower — live $WIZARD due-diligence terminal on Solana
         </h1>
 
-        {/* 1 · The Wizard's Ledger — hero market card (live · M1) */}
-        <WizardsLedger initial={initialMarket} className="col-span-12" />
+        {/* 1 · The Wizard's Ledger — hero market card (live · M1 + holder count M4) */}
+        <WizardsLedger
+          initial={initialMarket}
+          initialHolders={initialHolders}
+          className="col-span-12"
+        />
 
         {/* 2 · The Scrying Glass — price chart (live · M2) */}
         <TheScryingGlass
@@ -183,11 +182,14 @@ export default async function Home({
             </p>
             <p>
               $WIZARD launched on pump.fun. After the original deployer was
-              suspended on X, the community took the token over. Today{" "}
+              suspended on X, the community took the token over. Creator fees
+              are{" "}
               <span className="text-violet-soft">
-                100% of creator fees flow to Mimo’s wallet
-              </span>
-              .
+                split 50/50 between two wallets
+              </span>{" "}
+              — the community says one is Mimo’s and one is the token team’s,
+              but the chain can’t confirm who owns them. See Mimo’s Tribute
+              below for the full route the money takes.
             </p>
             <p className="text-muted">
               Buying $WIZARD is buying a creator-aligned memecoin: volatile,
@@ -197,17 +199,8 @@ export default async function Home({
           </div>
         </CardFrame>
 
-        {/* 10 · Mimo's Tribute — creator-fee tracker (stretch, M9) */}
-        <CardFrame
-          id="tribute"
-          title="Mimo’s Tribute"
-          subtitle="creator fees to Mimo"
-          source="on-chain · pending verification"
-          className="col-span-12 lg:col-span-5"
-        >
-          <StatHero label="Cumulative creator fees" />
-          <ChartSkeleton className="mt-4 h-20" />
-        </CardFrame>
+        {/* 10 · Mimo's Tribute — creator-fee route (M9, link-out variant) */}
+        <MimosTribute route={creatorFeeRoute} className="col-span-12 lg:col-span-5" />
 
         {/* 11 · The Wizard's Verdict — gold rubric callout (live · M7) */}
         <TheWizardsVerdict

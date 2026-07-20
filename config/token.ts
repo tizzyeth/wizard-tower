@@ -16,6 +16,24 @@ export const TOKEN = {
 } as const;
 
 /**
+ * Manual holder labels — the human override for the concentration exclusion set (§6).
+ *
+ * The label map is built automatically each census: DexScreener pool discovery ∪
+ * RugCheck `knownAccounts` + `markets[].pubkey` ∪ the burn address (see
+ * app/api/cron/snapshot/route.ts). Anything listed HERE is merged last and wins over
+ * discovery — use it when an account is provably protocol-owned but no upstream
+ * labels it (a new AMM, a locker, a bridge/CEX vault), or to correct a bad label.
+ *
+ * `pool` / `locker` / `burn` are EXCLUDED from the top-N bars, HHI and buckets;
+ * `creator` is labeled but still counted. Keys are OWNER wallet addresses (a pool's
+ * vault is owned by the pool address). Empty for $WIZARD: discovery covers every
+ * pool we have observed. Add an entry only with evidence, and note why.
+ */
+export const MANUAL_LABELS: Record<string, "pool" | "locker" | "burn" | "creator"> = {
+  // "SomeOwnerAddressHere1111111111111111111111": "pool", // why + link to evidence
+};
+
+/**
  * Tunable thresholds — kept here so the dashboard stays a config-first template.
  * A trade at or above `whaleUsd` earns the whale badge in the Ledger of Deeds (§4).
  */
@@ -131,8 +149,11 @@ export const LINKS = {
   telegram: "https://t.me/thesmokingwizards",
   tiktok: "https://www.tiktok.com/@mimofrl",
   creator: "https://mimofr.com",
-  // TODO(M8): point at the real repository once published
-  github: "https://github.com",
+  /**
+   * The source repository. NOTE: currently PRIVATE — this footer link 404s for
+   * visitors until the repo is made public (README → "What's still on you").
+   */
+  github: "https://github.com/Neutize/wizard-tower",
   buy: {
     pumpFun: `https://pump.fun/coin/${TOKEN.mint}`,
     jupiter: `https://jup.ag/swap/SOL-${TOKEN.mint}`,

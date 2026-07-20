@@ -1,7 +1,8 @@
 import { LINKS, TOKEN } from "@/config/token";
-import { Skeleton } from "@/components/wizard/Skeleton";
+import type { MarketResult } from "@/lib/sources/dexscreener";
 import { CaChip } from "./CaChip";
 import { CommandKButton } from "./CommandKButton";
+import { PriceTicker } from "./PriceTicker";
 
 const SOCIALS = [
   { label: "X", href: LINKS.x },
@@ -11,7 +12,13 @@ const SOCIALS = [
   { label: "Site", href: LINKS.site },
 ] as const;
 
-export function SiteHeader() {
+/**
+ * Sticky header (plan §4). A server component — only the price ticker needs to be
+ * live, so it is extracted as a small client child rather than making the whole
+ * header (and its link tree) client-side. `initialMarket` is the page's existing
+ * server-rendered snapshot, passed straight through as the ticker's seed.
+ */
+export function SiteHeader({ initialMarket }: { initialMarket: MarketResult }) {
   return (
     <header className="sticky top-0 z-40 border-b border-violet/25 bg-canvas/85 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4 md:px-6">
@@ -32,13 +39,7 @@ export function SiteHeader() {
 
         <CaChip address={TOKEN.mint} />
 
-        {/* Live price ticker slot — the live price lives in The Wizard's Ledger;
-            this stays a decorative placeholder (aria-hidden: not an SR-announced
-            loading state, since it never resolves). */}
-        <div aria-hidden className="hidden items-center gap-2 sm:flex">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-12" />
-        </div>
+        <PriceTicker initial={initialMarket} />
 
         <div className="ml-auto flex items-center gap-3">
           <CommandKButton />

@@ -5,7 +5,9 @@ import { StatHero } from "@/components/wizard/StatHero";
 import { StatGrid, type StatItem } from "@/components/wizard/StatGrid";
 import { AsOf, AwaitingReading, StaleBanner } from "@/components/wizard/DataStatus";
 import type { MarketResult } from "@/lib/sources/dexscreener";
+import type { HoldersResult } from "@/lib/holders";
 import {
+  fmtInt,
   fmtPct,
   fmtPrice,
   fmtNative,
@@ -14,6 +16,7 @@ import {
   signTone,
 } from "@/lib/format";
 import { useMarket } from "./useMarket";
+import { useHolders } from "./useHolders";
 
 const TONE_TEXT = {
   green: "text-green",
@@ -36,12 +39,19 @@ function ChangeChip({ label, value }: { label: string; value: number | null }) {
 
 export function WizardsLedger({
   initial,
+  initialHolders,
   className = "",
 }: {
   initial: MarketResult;
+  initialHolders: HoldersResult;
   className?: string;
 }) {
   const { result, degraded } = useMarket(initial);
+  // Holder count comes from OUR hourly census, not DexScreener. Shares the
+  // ["holders"] query key with the Council of Holders, so the page still polls
+  // /api/holders once and both cards read the same reading. Stays "—" until the
+  // first snapshot exists — the honest fallback, never a fabricated zero.
+  const { result: holders } = useHolders(initialHolders);
   const stale = degraded || result.stale;
   const d = result.data;
 
@@ -50,7 +60,7 @@ export function WizardsLedger({
       id="ledger"
       title="The Wizard’s Ledger"
       subtitle="live market snapshot"
-      source="DexScreener · 30s"
+      source="DexScreener · 30s · Helius · hourly"
       className={className}
     >
       {stale && d && <StaleBanner dataAsOf={result.dataAsOf} />}
@@ -73,13 +83,18 @@ export function WizardsLedger({
               </div>
             </div>
 
-            <StatGrid cols={4} className="flex-1" items={ledgerStats(d)} />
+            <StatGrid
+              cols={4}
+              className="flex-1"
+              items={ledgerStats(d, holders.data?.totalHolders ?? null)}
+            />
           </div>
 
           <p className="wiz-caption mt-4">
-            All-time high and holder count await the first on-chain snapshots — arriving
-            in a later chapter. Liquidity and volume sum the {d.activePoolCount} active
-            pools; price follows the {d.primaryDexLabel} main pool.
+            Holders are our own hourly on-chain census. All-time high still awaits a
+            source — DexScreener’s token feed does not carry it. Liquidity and volume
+            sum the {d.activePoolCount} active pools; price follows the{" "}
+            {d.primaryDexLabel} main pool.
           </p>
 
           <AsOf dataAsOf={result.dataAsOf} stale={stale} />
@@ -93,15 +108,23 @@ function initialSymbol(d: NonNullable<MarketResult["data"]>): string {
   return d.pools.find((p) => p.isPrimary)?.baseSymbol ?? "token";
 }
 
-function ledgerStats(d: NonNullable<MarketResult["data"]>): StatItem[] {
+function ledgerStats(
+  d: NonNullable<MarketResult["data"]>,
+  totalHolders: number | null,
+): StatItem[] {
   return [
     { label: "Market cap", value: fmtUsdCompact(d.marketCap) },
     { label: "FDV", value: fmtUsdCompact(d.fdv) },
     { label: "Liquidity", value: fmtUsdCompact(d.totalLiquidityUsd) },
     { label: "24h volume", value: fmtUsdCompact(d.volumeH24Usd) },
-    // Honest pending slots — no data source until the holder pipeline (M4).
+    // ATH has no source yet — DexScreener's token endpoint does not return it,
+    // so this stays an honest em-dash rather than a computed guess.
     { label: "ATH", value: "—", tone: "muted" },
-    { label: "Holders", value: "—", tone: "muted" },
+    // Gross distinct-owner count from the latest census (matches Solscan). "—"
+    // until the first snapshot lands; history is not retroactive.
+    totalHolders == null
+      ? { label: "Holders", value: "—", tone: "muted" }
+      : { label: "Holders", value: fmtInt(totalHolders) },
     { label: "Token age", value: d.tokenAge },
     { label: "Supply", value: fmtSupply(d.supply) },
   ];

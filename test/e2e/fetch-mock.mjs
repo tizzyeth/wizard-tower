@@ -27,6 +27,8 @@ const dexscreener = load("dexscreener-market.json");
 const rugcheck = load("rugcheck-report.json");
 const ohlcvHour = load("geckoterminal-ohlcv-hour.json");
 const ohlcvDay = load("geckoterminal-ohlcv-day.json");
+// M9: the recorded pump.fun fee-share config account behind Mimo's Tribute.
+const feeConfigAccount = load("pumpfun-fee-config-account.json");
 
 // Active WIZARD pools → their recorded trade fixtures (addresses from the
 // dexscreener fixture: PumpSwap main + two Meteora pools).
@@ -46,9 +48,22 @@ function json(body) {
 }
 
 /** Resolve a mocked upstream URL → a Response, or null to pass through. */
-function mockFor(url) {
+function mockFor(url, init) {
   if (url.includes("api.dexscreener.com")) return json(dexscreener);
   if (url.includes("api.rugcheck.xyz")) return json(rugcheck);
+
+  // Helius JSON-RPC — one URL, many methods, so branch on the request body.
+  // Mimo's Tribute reads the creator's fee-share config via getAccountInfo.
+  if (url.includes("helius-rpc.com")) {
+    let method = null;
+    try {
+      method = JSON.parse(init?.body ?? "{}").method ?? null;
+    } catch {
+      method = null;
+    }
+    if (method === "getAccountInfo") return json(feeConfigAccount);
+    throw new Error(`[fetch-mock] unmocked Helius RPC method: ${method}`);
+  }
 
   if (url.includes("api.geckoterminal.com")) {
     if (url.includes("/trades")) {
@@ -72,7 +87,7 @@ const realFetch = globalThis.fetch;
 
 globalThis.fetch = async function mockedFetch(input, init) {
   const url = typeof input === "string" ? input : input?.url ?? String(input);
-  const mocked = mockFor(url);
+  const mocked = mockFor(url, init);
   if (mocked) return mocked;
   return realFetch(input, init);
 };
