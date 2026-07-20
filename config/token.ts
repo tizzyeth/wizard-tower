@@ -114,6 +114,47 @@ export const THRESHOLDS = {
     points: { pass: 100, warn: 50, fail: 0 },
     band: { strong: 75, fair: 45 },
   },
+
+  /**
+   * Data freshness — how old a feed's newest row may get before `lib/health.ts`
+   * calls it degraded (warn) or down (fail). Consumed by GET /api/health and the
+   * header's live dot.
+   *
+   * WHY THESE ARE MUCH LOOSER THAN THE NOMINAL CRON CADENCE: the schedule is the
+   * promise, the observed write interval is the reality, and they are far apart.
+   * Bands are set from MEASURED gaps on a healthy production system (2026-07-19/20),
+   * not from the cron expression — a threshold that fires on normal behaviour is
+   * worse than no threshold, because it trains the operator to ignore the dot.
+   *
+   * `holderSnapshots` — nominal hourly (`0 * * * *`).
+   *   Measured gaps on a working cron: 0.2h, 0.1h, 13.4h, 3.0h. The 13.4h gap was
+   *   an overnight run of GitHub's best-effort scheduler, NOT a fault — schedules
+   *   are routinely delayed under platform load and often do not fire at all for
+   *   the first period after a repo is pushed (see README → The two crons).
+   *   → warn 6h  = six consecutive missed runs; past lag, worth a glance.
+   *   → fail 24h = a full day with no census. The holder chart has visibly stopped;
+   *     this is broken, not slow.
+   *
+   * `xPosts` — nominal every 30 minutes, but `fetched_at` advances
+   *   ONLY when the poller actually writes a row, and the poller is `since_id`
+   *   narrowed: a run that finds no new posts upserts nothing and leaves
+   *   `fetched_at` untouched (app/api/cron/social/route.ts → upsertPosts returns
+   *   early on an empty batch). So this clock measures "when the community last
+   *   posted AND we caught it", not "when the poller last ran" — it goes quiet
+   *   overnight on a perfectly healthy system.
+   *   Measured gaps between writes: 8.9h, 4.9h, 2.4h.
+   *   → warn 12h = clears the observed 8.9h quiet-hours gap with margin.
+   *   → fail 36h = a day and a half of neither new posts nor a working poller.
+   *     Catches the silent killer this check exists for — `X_POLL_ENABLED=false`
+   *     left on, which makes every run exit 0 while writing nothing.
+   *
+   * Tune here, never in the evaluation code. Loosen if the dot cries wolf; tighten
+   * only with measured evidence that the feed really is writing more often.
+   */
+  freshness: {
+    holderSnapshots: { warnHours: 6, failHours: 24 },
+    xPosts: { warnHours: 12, failHours: 36 },
+  },
 } as const;
 
 export const X_COMMUNITY_ID = "2031864427176476866";
