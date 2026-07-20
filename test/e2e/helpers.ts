@@ -56,6 +56,11 @@ const LIVE_HOSTS = [
   "api.geckoterminal.com",
   "api.rugcheck.xyz",
   "api.x.com",
+  // Bubblemaps is offered as a link-out from Wards & Protections, never framed
+  // or fetched (their frame-ancestors policy excludes this origin anyway). Listed
+  // so the guarantee is enforced: a link is inert until a visitor clicks it, so
+  // no third party is contacted on page load.
+  "bubblemaps.io",
 ];
 
 export function isLiveUpstream(req: Request): boolean {
