@@ -154,6 +154,25 @@ body {
   50% { opacity: 0.35; }
 }
 
+/* Stale-data variants of the live dot (components/header/LiveDot.tsx).
+   Both KILL the pulse rather than adding motion — a feed that stopped arriving
+   should read as gone quiet, not as an emergency. No new accent is introduced:
+   warn borrows the muted mauve already used for secondary text, down borrows the
+   rose already used by the cards' stale banner. Ember stays the healthy state's
+   and gold remains the Verdict's alone. */
+
+.wiz-live-dot--warn {
+  background-color: var(--color-muted);
+  box-shadow: 0 0 6px rgb(156 139 163 / 0.5);
+  animation: none;
+}
+
+.wiz-live-dot--down {
+  background-color: var(--color-rose);
+  box-shadow: 0 0 6px rgb(251 113 133 / 0.6);
+  animation: none;
+}
+
 /* ── Film-grain overlay (desktop only, static — no motion) ────
    User-toggleable via the cmd+K palette (§3): the palette sets
    `data-grain="off"` on <html> and persists the choice. Default (no

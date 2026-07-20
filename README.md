@@ -246,6 +246,83 @@ Cron failure modes, in likelihood order:
 
 > **GitHub's schedule is best-effort, not a guarantee.** Scheduled workflows only fire from the **default branch**, often do not fire at all for the first period after a repo is pushed, and are routinely delayed under platform load (occasionally by 30+ minutes). A missing run right after setup is usually GitHub, not your config — confirm with a `workflow_dispatch` run first, and only then investigate. GitHub also **disables schedules automatically after 60 days of repository inactivity**; if the crons quietly stop months from now, check that first.
 
+### Knowing when the crons break
+
+Both cron failure modes are covered, because they are genuinely different problems and neither alarm catches the other.
+
+| | **A run failed** | **Runs "succeed" but data is dead** |
+|---|---|---|
+| Looks like | red X in the Actions tab | all green, chart quietly flat |
+| Caught by | `.github/workflows/cron-failure-issue.yml` | `GET /api/health` + the header dot |
+| Alerts | a GitHub issue (+ GitHub's own email) | HTTP 503, and the live dot goes stale |
+
+**Why both.** A failure alert can only fire when a run happens *and* fails. If the schedule stops firing at all — the 60-day auto-disable above, or a workflow someone disabled by hand — there is no run, no failure, and no alert. Equally, a run can exit 0 having written nothing: `X_POLL_ENABLED=false` left on, or a 200 that upserted zero rows. Only the data can testify to those, which is what the freshness check reads.
+
+#### A · Failure → a GitHub issue
+
+On a failed run, both cron workflows call the shared reusable workflow `cron-failure-issue.yml`, which opens an issue labelled **`cron-failure`** naming the workflow, the time, and a link to the failed run, with the triage table above inlined. If an open issue for that same workflow already exists it **comments on it instead** — repeat failures do not spam duplicates. The label is created automatically on first use.
+
+One reusable workflow rather than a copy in each cron: the logic exists once, and calling it inline (rather than via a `workflow_run` listener) means the alert shares the failed run's own context, so the link can never point at the wrong run.
+
+> GitHub *already* emails the repo owner when a **scheduled** workflow fails. That email is the fast path; the issue is the durable one — it lives in the repo, survives a filtered inbox, is visible to anyone with access, and carries the triage steps. Treat the issue as the record of truth.
+
+**Close the issue once the cron is green again.** The next failure after that opens a fresh one; leaving it open means the next incident only shows up as a comment on a stale issue.
+
+**Requires** `issues: write`, declared on the calling job in each cron workflow (a called workflow can only narrow the caller's permissions, never widen them). If issue creation fails with 403, check **Settings → Actions → General → Workflow permissions** allows write access.
+
+#### B · Freshness → `GET /api/health`
+
+Reads the database only — no third-party API, two `max()` queries behind a 30s cache. Cheap enough for an uptime monitor or a bot to poll.
+
+```bash
+curl -s https://wizard-tower-iota.vercel.app/api/health | jq
+```
+
+```json
+{
+  "status": "ok",
+  "dbAvailable": true,
+  "feeds": [
+    { "key": "holderSnapshots", "status": "ok", "ageHours": 0.4, "warnAfterHours": 6, "failAfterHours": 24 },
+    { "key": "xPosts",          "status": "ok", "ageHours": 0.2, "warnAfterHours": 12, "failAfterHours": 36 }
+  ],
+  "note": "all feeds fresh"
+}
+```
+
+Per feed and overall: **`ok`** fresh · **`degraded`** past its warn threshold · **`down`** past its fail threshold · **`unknown`** not judgeable (no database, or nothing recorded yet). HTTP status is **200** for ok/degraded/unknown and **503** for down, so a monitor that only reads status codes still catches a real outage. `unknown` never counts as a fault — an alert that fires when it knows nothing is an alert people learn to ignore.
+
+In the UI this is the header's live dot, and nothing else: ember pulsing = fresh, dim mauve = degraded, rose = down, with the literal age in its tooltip and in screen-reader text ("holder snapshots last recorded 9h ago"). Stale states *stop* the pulse rather than adding motion. This is deliberately not duplicated in the cards — their stale banners report an **upstream provider** outage, which is a different fault from **our own pipeline** going quiet.
+
+#### Tuning the thresholds
+
+They live in `config/token.ts` → `THRESHOLDS.freshness`, in hours, with the full reasoning in the comment there:
+
+```ts
+freshness: {
+  holderSnapshots: { warnHours: 6,  failHours: 24 },
+  xPosts:          { warnHours: 12, failHours: 36 },
+}
+```
+
+These are **much looser than the cron cadence, on purpose** — they are set from measured write intervals on a healthy system, not from the cron expression. Observed gaps while everything worked: **13.4h** between snapshots (an overnight run of GitHub's best-effort scheduler) and **8.9h** between `x_posts` writes. Thresholds at the nominal cadence would have fired on all of them, and an indicator that cries wolf is worse than none.
+
+Two things to understand before tightening them:
+
+- **`x_posts.fetched_at` is not a heartbeat.** The poller is `since_id`-narrowed, so a run that finds no new posts writes nothing and leaves the timestamp untouched. That clock measures "the community posted and we caught it", not "the poller ran" — it goes quiet overnight on a perfectly healthy system, which is why its warn band is 12h and not 30 minutes. Making it a true heartbeat would mean writing a per-run marker (e.g. into `kv_cache`) from the social cron.
+- **Loosen freely, tighten only with evidence.** If the dot warns during normal operation, the threshold is wrong, not the pipeline.
+
+#### Testing it
+
+```bash
+pnpm test                     # 25 freshness unit tests (test/health.test.ts)
+curl -s localhost:3000/api/health | jq   # against your real DATABASE_URL
+```
+
+To see the degraded and down states end-to-end, temporarily tighten a threshold in `config/token.ts` below the live data's age (e.g. `warnHours: 0.1`), rebuild, hit `/api/health`, then **put it back**. The unit tests cover fresh / warn / stale / never-recorded / DB-unreachable without touching config.
+
+The failure-issue workflow cannot be tested without a real failing run. To force one safely, run a cron workflow manually with a deliberately broken `SITE_URL` Actions Variable, confirm the issue appears, then restore the variable and close the issue.
+
 ### When a card shows the stale banner
 
 The banner ("last good reading, as of …") means the upstream failed and stale-while-revalidate served the previous data. **This is working as designed** — it is not an outage.

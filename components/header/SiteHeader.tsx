@@ -1,7 +1,9 @@
 import { LINKS, TOKEN } from "@/config/token";
 import type { MarketResult } from "@/lib/sources/dexscreener";
+import type { HealthReport } from "@/lib/health";
 import { CaChip } from "./CaChip";
 import { CommandKButton } from "./CommandKButton";
+import { LiveDot } from "./LiveDot";
 import { PriceTicker } from "./PriceTicker";
 
 const SOCIALS = [
@@ -17,8 +19,17 @@ const SOCIALS = [
  * live, so it is extracted as a small client child rather than making the whole
  * header (and its link tree) client-side. `initialMarket` is the page's existing
  * server-rendered snapshot, passed straight through as the ticker's seed.
+ *
+ * `health` is the cron-freshness report (lib/health.ts) that colours the live dot.
+ * Nullable so the header still renders if the page ever chooses not to read it.
  */
-export function SiteHeader({ initialMarket }: { initialMarket: MarketResult }) {
+export function SiteHeader({
+  initialMarket,
+  health = null,
+}: {
+  initialMarket: MarketResult;
+  health?: HealthReport | null;
+}) {
   return (
     <header className="sticky top-0 z-40 border-b border-violet/25 bg-canvas/85 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4 md:px-6">
@@ -85,14 +96,7 @@ export function SiteHeader({ initialMarket }: { initialMarket: MarketResult }) {
             </div>
           </details>
 
-          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted">
-            <span
-              aria-hidden
-              title="the pipe is lit"
-              className="wiz-live-dot inline-block h-1.5 w-1.5 rounded-full"
-            />
-            live
-          </span>
+          <LiveDot health={health} />
         </div>
       </div>
     </header>
