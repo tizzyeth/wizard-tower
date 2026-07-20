@@ -17,6 +17,7 @@ import { holderSnapshots } from "@/db/schema";
 import { scanHolders } from "@/lib/sources/helius";
 import { getMarket } from "@/lib/sources/dexscreener";
 import { getSafety } from "@/lib/sources/rugcheck";
+import { MANUAL_LABELS } from "@/config/token";
 import {
   computeConcentration,
   BURN_ADDRESS,
@@ -36,6 +37,10 @@ function unauthorized() {
  * discovery AND RugCheck's labeled AMM accounts (a pool's vault is owned by the
  * pool address); lockers + the burn address are excluded; the creator wallet is
  * labeled but stays counted. Pool/locker labels win over creator on any overlap.
+ *
+ * `MANUAL_LABELS` (config/token.ts) is merged LAST and overrides everything — the
+ * documented escape hatch for an account no upstream labels correctly (README →
+ * "Adding a pool label").
  */
 function buildLabels(
   market: Awaited<ReturnType<typeof getMarket>>["data"],
@@ -48,6 +53,7 @@ function buildLabels(
   labels[BURN_ADDRESS] = "burn";
   const creator = safety?.creator ?? null;
   if (creator && !labels[creator]) labels[creator] = "creator";
+  for (const [address, label] of Object.entries(MANUAL_LABELS)) labels[address] = label;
   return { labels, creator };
 }
 

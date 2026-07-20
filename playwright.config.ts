@@ -36,7 +36,12 @@ export default defineConfig({
     // WIZARD_DISABLE_DB gates off the Neon client so the run never touches a live
     // DB (getHolders + the kv_cache layer no-op → the holders card renders its
     // deterministic empty state, and no neon fetch escapes the fetch-mock).
-    command: `WIZARD_DISABLE_DB=1 NODE_OPTIONS='--import ./test/e2e/fetch-mock.mjs' pnpm exec next start -p ${PORT}`,
+    //
+    // HELIUS_API_KEY is pinned to a dummy so Mimo's Tribute (M9) takes its normal
+    // fetch path — the fetch-mock answers the RPC from a fixture — instead of
+    // short-circuiting on a missing key. The run stays deterministic whether or
+    // not the developer has a real key in .env.local.
+    command: `WIZARD_DISABLE_DB=1 HELIUS_API_KEY=e2e-dummy-key NODE_OPTIONS='--import ./test/e2e/fetch-mock.mjs' pnpm exec next start -p ${PORT}`,
     url: BASE_URL,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
