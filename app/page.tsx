@@ -16,11 +16,13 @@ import { MimosTribute } from "@/components/cards/MimosTribute";
 import { getMarket } from "@/lib/sources/dexscreener";
 import { getCreatorFeeRoute } from "@/lib/sources/creator-fees";
 import { getOhlcv, DEFAULT_TIMEFRAME } from "@/lib/sources/geckoterminal";
-import { activePoolsFromMarket, getTrades } from "@/lib/sources/gecko-trades";
+import { activePoolsFromMarket } from "@/lib/sources/gecko-trades";
+import { getTradesWithArchive } from "@/lib/trades-archive";
 import { getSafety } from "@/lib/sources/rugcheck";
 import { getHolders } from "@/lib/holders";
 import { getHealth } from "@/lib/health";
 import { getSocial, getPostingCadence } from "@/lib/social";
+import { computeAth } from "@/lib/metrics/ath";
 import { LINKS, TOKEN } from "@/config/token";
 
 // Live market data: fetch the initial snapshot on the server so the page paints
@@ -56,7 +58,10 @@ export default async function Home({
   // Seed the M3 cards on the server so the tape + flow paint real deeds with no
   // skeleton flash. The trade tape merges every active pool; Flow of Mana's 30d
   // volume bars reuse the daily OHLCV series (tf=1d) for the primary pool.
-  const initialTrades = await getTrades({
+  // M10: `getTradesWithArchive` serves the same tape, but swaps in an archive-backed
+  // 24h flow census once our own `trades` table covers the whole window (and says so
+  // via flowSource/archiveSince). Before that it is the live window, unchanged.
+  const initialTrades = await getTradesWithArchive({
     pools: activePoolsFromMarket(initialMarket),
     forceRefresh: fault,
     simulateFailure: fault,
@@ -67,6 +72,13 @@ export default async function Home({
     forceRefresh: fault,
     simulateFailure: fault,
   });
+
+  // M10: ATH from the daily series that is already fetched above — no extra call.
+  // It is a max over the main pool's whole indexed life, which begins at the pool's
+  // creation and NOT at the token's pump.fun launch, so the card labels it
+  // "ATH (since <date>)" rather than claiming an absolute high. Null → the card
+  // keeps its honest em-dash.
+  const ath = computeAth(initialDaily.data?.candles ?? []);
 
   // Seed Wards & Protections on the server so the runes paint with no skeleton
   // flash (RugCheck report, 1h server cache). Token age for the card comes from
@@ -118,6 +130,7 @@ export default async function Home({
         <WizardsLedger
           initial={initialMarket}
           initialHolders={initialHolders}
+          ath={ath}
           className="col-span-12"
         />
 
