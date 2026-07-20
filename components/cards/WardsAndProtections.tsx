@@ -12,11 +12,16 @@ import { LINKS } from "@/config/token";
 import { useSafety } from "./useSafety";
 import { useHolders } from "./useHolders";
 
-/** Deep links out to the reports a buyer should verify against (plan §4). */
+/**
+ * Deep links out to the reports a buyer should verify against (plan §4).
+ *
+ * Bubblemaps is deliberately NOT in this row — it is a different instrument
+ * (a relationship map, not a report), so it gets its own explained affordance
+ * below. See the note there on why it stays a link-out rather than an embed.
+ */
 const DEEP_LINKS: ReadonlyArray<readonly [string, string]> = [
   ["RugCheck", LINKS.explorers.rugcheck],
   ["Solscan", LINKS.explorers.solscan],
-  ["Bubblemaps", LINKS.explorers.bubblemaps],
 ];
 
 const SUMMARY: Record<CheckStatus, { glyph: string; tone: string; headline: string }> = {
@@ -133,6 +138,38 @@ export function WardsAndProtections({
               </span>
             ))}
           </p>
+
+          {/*
+            Holder relationship map — link-out, not an embed (plan §10 backlog).
+            Bubblemaps serves `Content-Security-Policy: frame-ancestors` naming
+            only its own domains plus a handful of partners (assetdash, bullx,
+            mobyscreener, tinyastro) and localhost; this origin is not on that
+            list, so a framed map renders as a browser block page in production.
+            Even from an allow-listed origin the map boots blank inside a frame.
+            A link-out is therefore the only honest way to offer it — and it has
+            the side benefit that Bubblemaps is never contacted until a visitor
+            chooses to go there.
+          */}
+          <div className="mt-3 rounded border border-violet/15 bg-panel-2/60 px-3 py-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-[10px] uppercase tracking-[0.12em] text-muted">
+                Holder relationship map
+              </span>
+              <a
+                href={LINKS.explorers.bubblemaps}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-xs text-violet-soft transition-colors hover:text-ink"
+              >
+                Open on Bubblemaps ↗
+              </a>
+            </div>
+            <p className="mt-1.5 text-xs text-muted">
+              The council counts the holders; Bubblemaps draws the lines between them —
+              which wallets cluster, and which have passed coin to one another. Opens in a
+              new tab, charted from Bubblemaps&rsquo; own reading of the chain, not ours.
+            </p>
+          </div>
 
           <p className="wiz-caption mt-3">
             Each ward shows its measured value and the threshold it is judged against.
