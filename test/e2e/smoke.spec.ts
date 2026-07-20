@@ -87,6 +87,36 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     expect(consoleErrors, "no console errors during palette use").toEqual([]);
   });
 
+  /**
+   * Plan §10 backlog ("Bubblemaps iframe embed") resolved as a link-out: Bubblemaps
+   * serves a `frame-ancestors` allow-list that excludes this origin, so a framed map
+   * is a browser block page in production. This asserts the honest alternative — an
+   * affordance that says what the map shows, attributes it, and opens externally —
+   * and that no frame or request to Bubblemaps happens on load.
+   */
+  test("the holder relationship map is an explained external link, never a frame", async ({
+    page,
+  }) => {
+    await mockApiRoutes(page);
+    const { consoleErrors, liveRequests } = attachGuards(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const safety = page.locator("#safety");
+    await expect(safety).toContainText("Holder relationship map");
+    // Attribution: the map is Bubblemaps' reading of the chain, not the tower's.
+    await expect(safety).toContainText(/own reading of the chain/);
+
+    const link = safety.getByRole("link", { name: /Open on Bubblemaps/ });
+    await expect(link).toHaveAttribute("href", /v2\.bubblemaps\.io\/map\?address=/);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", /noopener/);
+
+    // The card offers no frame, and Bubblemaps is not contacted before a click.
+    await expect(safety.locator("iframe")).toHaveCount(0);
+    expect(liveRequests, "no third party contacted on load").toEqual([]);
+    expect(consoleErrors, "no console errors").toEqual([]);
+  });
+
   test("the grain overlay toggles off from the palette", async ({ page }) => {
     await mockApiRoutes(page);
     await page.goto("/", { waitUntil: "networkidle" });
