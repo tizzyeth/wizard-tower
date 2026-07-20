@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "stale": false,
+  "dataAsOf": 1784489867781,
+  "data": {
+    "source": "community",
+    "lastFetchedAt": 1784489867781,
+    "posts": [
+      {
+        "id": "2078908442983743515",
+        "source": "community",
+        "authorHandle": "libretaxservice",
+        "authorName": "Libre Tax Services",
+        "authorAvatarUrl": null,
+        "text": "$WIZARD | 7XdCaKpqLmKE2K7yr9xaeWB1H2CVZ1oGwxB6hmd9pump",
+        "createdAt": 1784468267781,
+        "likes": 3,
+        "reposts": 1,
+        "replies": 0,
+        "media": [],
+        "url": "https://x.com/libretaxservice/status/2078908442983743515"
+      },
+      {
+        "id": "2078900000000000001",
+        "source": "community",
+        "authorHandle": "covenwatcher",
+        "authorName": "Coven Watcher",
+        "authorAvatarUrl": null,
+        "text": "Attention $WIZARD family \u2014 the smoking wizard rises again",
+        "createdAt": 1784446667781,
+        "likes": 41,
+        "reposts": 12,
+        "replies": 5,
+        "media": [],
+        "url": "https://x.com/covenwatcher/status/2078900000000000001"
+      },
+      {
+        "id": "2078800000000000002",
+        "source": "community",
+        "authorHandle": "wizardpilled",
+        "authorName": "wizardpilled",
+        "authorAvatarUrl": null,
+        "text": "smoking wizard is the only lore that matters $WIZARD",
+        "createdAt": 1784403467781,
+        "likes": 88,
+        "reposts": 20,
+        "replies": 9,
+        "media": [],
+        "url": "https://x.com/wizardpilled/status/2078800000000000002"
+      }
+    ]
+  }
+}

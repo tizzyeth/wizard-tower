@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "apiVersion": "4.1.0",
+      "slot": 433950197
+    },
+    "value": {
+      "amount": "999767807726302",
+      "decimals": 6,
+      "uiAmount": 999767807.726302,
+      "uiAmountString": "999767807.726302"
+    }
+  },
+  "id": "wizard-tower"
+}
