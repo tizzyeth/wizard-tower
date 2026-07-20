@@ -195,7 +195,7 @@ export const LINKS = {
    * in the UI (a 404 for visitors). Kept here for operators; re-add the footer
    * link in SiteFooter if the repo is ever made public.
    */
-  github: "https://github.com/Neutize/wizard-tower",
+  github: "https://github.com/tizzyeth/wizard-tower",
   buy: {
     pumpFun: `https://pump.fun/coin/${TOKEN.mint}`,
     jupiter: `https://jup.ag/swap/SOL-${TOKEN.mint}`,
