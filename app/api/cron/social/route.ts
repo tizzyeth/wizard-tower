@@ -31,6 +31,12 @@ export const maxDuration = 60;
 
 const sinceKey = (source: XSource) => `x:since_id:${source}`;
 
+/** kv_cache key holding the epoch-ms of the last poll that actually spent X API calls. */
+const LAST_POLL_KEY = "x:last_poll_at";
+
+/** Floor between paid polls. See the rationale at the call site in POST. */
+const MIN_POLL_INTERVAL_MS = 25 * 60_000;
+
 function unauthorized() {
   return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
 }
@@ -119,7 +125,42 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   if (!db) return Response.json({ ok: false, error: "database unavailable" }, { status: 503 });
 
+  // X is the one PAID upstream in this stack, billed per call (plan §5 budgets
+  // ≲100 calls/day at 2 calls/run). The shared data cron fires every 15 minutes
+  // because the trade archive needs that cadence — but letting the poller ride
+  // along would be 96 runs/day = 192 calls, double the budget, for posts that
+  // are not twice as fresh. So the route enforces its own floor, exactly like
+  // /api/cron/snapshot does: the schedule serves the strictest consumer, and
+  // each route declares what it actually needs.
+  //
+  // 25 rather than 30 minutes so a run arriving slightly early still polls
+  // instead of deferring a whole cycle. `?force=1` overrides for manual runs.
+  const force = new URL(request.url).searchParams.get("force") === "1";
+  if (!force) {
+    const last = (await kvGet<number>(LAST_POLL_KEY))?.value ?? null;
+    const sinceLast = typeof last === "number" ? Date.now() - last : null;
+    if (sinceLast !== null && sinceLast < MIN_POLL_INTERVAL_MS) {
+      const ageMin = Math.round(sinceLast / 60_000);
+      console.log(
+        `[cron/social] skipped — polled ${ageMin}m ago (min interval ${
+          MIN_POLL_INTERVAL_MS / 60_000
+        }m, 0 calls). Pass ?force=1 to override.`,
+      );
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "polled recently",
+        calls: 0,
+        lastPollMinutesAgo: ageMin,
+        minIntervalMinutes: MIN_POLL_INTERVAL_MS / 60_000,
+      });
+    }
+  }
+
   const startedAt = Date.now();
+  // Stamp before polling: a run that dies mid-flight has still spent its calls,
+  // and must not invite an immediate retry that spends them again.
+  await kvSet(LAST_POLL_KEY, startedAt);
   // Poll both feeds independently — one failing must not sink the other.
   const [official, community] = await Promise.all([
     pollFeed(db, "official", fetchOfficialPosts),

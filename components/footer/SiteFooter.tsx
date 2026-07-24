@@ -1,3 +1,5 @@
+import { LINKS } from "@/config/token";
+
 const SOURCES = ["DexScreener", "GeckoTerminal", "Helius", "RugCheck", "X"] as const;
 
 export function SiteFooter() {
@@ -19,6 +21,18 @@ export function SiteFooter() {
         <p className="mt-3 text-xs text-muted">
           community-built · unofficial · informational only · not financial advice ·
           DYOR
+        </p>
+        {/* The source is public: every figure on this page can be traced to the
+            code that computed it. That auditability is the point of the link. */}
+        <p className="mt-3 text-xs">
+          <a
+            href={LINKS.github}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-soft underline decoration-violet/40 underline-offset-2 transition-colors hover:text-ink"
+          >
+            Source on GitHub
+          </a>
         </p>
       </div>
     </footer>
