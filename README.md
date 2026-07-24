@@ -2,7 +2,7 @@
 
 A single-page, real-time due-diligence terminal for **Smoking Wizard ($WIZARD)** on Solana — price, liquidity, holder distribution, safety wards, a unified trade tape, the community feed, and an auto-computed verdict, all on one dark data-dense page.
 
-**Live:** <https://wizard-tower-iota.vercel.app>
+**Live:** <https://wizard-tower-nu.vercel.app>
 
 > **Community-built · unofficial · informational only · not financial advice · DYOR.**
 > This dashboard is not affiliated with the token's creators. It reads public data and shows it straight — including the unflattering parts (concentration risk, safety flags) as prominently as price. It never touches a wallet; every "Buy" control is a plain outbound link. Nothing here is a recommendation to buy or sell anything.
@@ -77,7 +77,9 @@ config/token.ts                # THE config — the only token-specific file
 db/schema.ts                   # Drizzle schema
 test/fixtures/                 # recorded live responses (unit tests)
 test/e2e/fixtures/             # recorded /api/* responses (Playwright)
-.github/workflows/             # snapshot.yml (hourly) · social.yml (30 min) · trades-archive.yml (15 min)
+.github/workflows/             # data-crons.yml — THE schedule (15 min, POSTs all three cron routes)
+                               # snapshot/social/trades-archive.yml — same routes, dispatch-only
+                               # cron-failure-issue.yml — reusable failure → GitHub issue
 ```
 
 **Where things live — the rules:**
@@ -213,7 +215,7 @@ The trade archive is offset off the quarter-hours on purpose: GitHub's scheduler
 
 Both require, on the repo (Settings → Secrets and variables → Actions):
 
-- **Variable** `SITE_URL` = production origin, e.g. `https://wizard-tower-iota.vercel.app`
+- **Variable** `SITE_URL` = production origin, e.g. `https://wizard-tower-nu.vercel.app`
 - **Secret** `CRON_SECRET` = the *same* value as in Vercel
 
 Both use `concurrency` groups so two runs never overlap, and both fail loudly (`::error::`) on a non-200.
@@ -229,7 +231,7 @@ gh workflow run "Trade archive (every 15 min)"
 Or hit the route directly (this spends real API credits):
 
 ```bash
-curl -i -X POST https://wizard-tower-iota.vercel.app/api/cron/snapshot \
+curl -i -X POST https://wizard-tower-nu.vercel.app/api/cron/snapshot \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
@@ -285,7 +287,7 @@ One reusable workflow rather than a copy in each cron: the logic exists once, an
 Reads the database only — no third-party API, two `max()` queries behind a 30s cache. Cheap enough for an uptime monitor or a bot to poll.
 
 ```bash
-curl -s https://wizard-tower-iota.vercel.app/api/health | jq
+curl -s https://wizard-tower-nu.vercel.app/api/health | jq
 ```
 
 ```json
@@ -371,7 +373,7 @@ The workflow also raises a `::warning::` annotation when the response contains a
 The banner ("last good reading, as of …") means the upstream failed and stale-while-revalidate served the previous data. **This is working as designed** — it is not an outage.
 
 1. Check whether it is one card or all of them. One card = that provider; all = our deploy or network.
-2. Hit the route directly: `curl -s https://wizard-tower-iota.vercel.app/api/market | head -c 400`. The envelope's `error` field names the cause.
+2. Hit the route directly: `curl -s https://wizard-tower-nu.vercel.app/api/market | head -c 400`. The envelope's `error` field names the cause.
 3. If the GeckoTerminal cards (chart, tape, flow) are stale together, you are likely being throttled — the shared 25/min limiter bailed after its 3s wait. It recovers on its own.
 4. It clears itself on the next successful poll. Only intervene if it persists across several intervals, which usually means the upstream changed shape and the zod boundary is rejecting it — check the deploy logs for a validation error, then update the mapper *and* its recorded fixture.
 
@@ -451,7 +453,7 @@ Managed by the **Neon ⟷ Vercel marketplace integration** in production — pre
 2. Vercel: the integration re-injects the value. If you ever set it manually, update it manually.
 3. Redeploy.
 4. Update `.env.local` separately for local work.
-5. Verify: `curl -s https://wizard-tower-iota.vercel.app/api/holders | head -c 200` should return a census, not `database unavailable`.
+5. Verify: `curl -s https://wizard-tower-nu.vercel.app/api/holders | head -c 200` should return a census, not `database unavailable`.
 
 A bad `DATABASE_URL` degrades rather than breaks: `getDb()` returns null, the holders and social cards show empty states, and the crons return 503.
 
