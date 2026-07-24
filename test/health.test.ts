@@ -141,6 +141,19 @@ describe("buildReport", () => {
     expect(report.status).toBe("ok");
   });
 
+  it("tolerates a quiet community plus a full 4h poll cycle", () => {
+    // The scenario the xPosts bands were widened for (2026-07-25): the poll floor
+    // is 4h, so a post landing right after a poll waits a cycle to be seen. Stack
+    // that on the measured 8.9h quiet stretch and a HEALTHY feed can read ~13h
+    // old — which the previous 12h warn band would have flagged as degraded.
+    const report = buildReport(
+      { holderSnapshotsAt: agoHours(0.5), xPostsAt: agoHours(13), dbAvailable: true },
+      NOW,
+    );
+    expect(report.status).toBe("ok");
+    expect(report.feeds.find((f) => f.key === "xPosts")?.status).toBe("ok");
+  });
+
   it("still catches the 13.4h snapshot gap as degraded, not silently fine", () => {
     const report = buildReport(
       { holderSnapshotsAt: agoHours(13.4), xPostsAt: agoHours(1), dbAvailable: true },
@@ -162,8 +175,10 @@ describe("buildReport", () => {
 
   it("catches X_POLL_ENABLED=false — snapshots fine, prophecy feed long dead", () => {
     // The silent killer: every run exits 0, nothing is ever written.
+    // 52h is past the 48h fail band — the bands were widened from 12h/36h when
+    // the poll floor went to 4h, so this age must stay clear of the new one.
     const report = buildReport(
-      { holderSnapshotsAt: agoHours(0.5), xPostsAt: agoHours(40), dbAvailable: true },
+      { holderSnapshotsAt: agoHours(0.5), xPostsAt: agoHours(52), dbAvailable: true },
       NOW,
     );
     expect(report.status).toBe("down");

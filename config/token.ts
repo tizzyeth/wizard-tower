@@ -135,25 +135,33 @@ export const THRESHOLDS = {
    *   → fail 24h = a full day with no census. The holder chart has visibly stopped;
    *     this is broken, not slow.
    *
-   * `xPosts` — nominal every 30 minutes, but `fetched_at` advances
-   *   ONLY when the poller actually writes a row, and the poller is `since_id`
-   *   narrowed: a run that finds no new posts upserts nothing and leaves
-   *   `fetched_at` untouched (app/api/cron/social/route.ts → upsertPosts returns
-   *   early on an empty batch). So this clock measures "when the community last
-   *   posted AND we caught it", not "when the poller last ran" — it goes quiet
-   *   overnight on a perfectly healthy system.
-   *   Measured gaps between writes: 8.9h, 4.9h, 2.4h.
-   *   → warn 12h = clears the observed 8.9h quiet-hours gap with margin.
-   *   → fail 36h = a day and a half of neither new posts nor a working poller.
-   *     Catches the silent killer this check exists for — `X_POLL_ENABLED=false`
-   *     left on, which makes every run exit 0 while writing nothing.
+   * `xPosts` — polled at most every 4h (the floor lives in
+   *   app/api/cron/social/route.ts), and `fetched_at` advances ONLY when the
+   *   poller actually writes a row: the poll is `since_id` narrowed, so a run
+   *   that finds no new posts upserts nothing and leaves the timestamp
+   *   untouched. So this clock measures "when the community last posted AND we
+   *   caught it", not "when the poller last ran" — it goes quiet overnight on a
+   *   perfectly healthy system.
+   *
+   *   TWO sources of lag stack here, which is why these bands are so loose:
+   *     1. the community's own silence — measured write gaps of 8.9h, 4.9h, 2.4h
+   *        back when polling was every 30 minutes;
+   *     2. up to 4h of detection lag, since a post landing right after a poll
+   *        waits for the next one.
+   *   → warn 24h  = the observed 8.9h quiet stretch plus a full poll cycle, with
+   *     room to spare. Anything under this is normal for a ~10 posts/week feed.
+   *   → fail 48h  = two days of neither new posts nor a working poller. Catches
+   *     the silent killer this check exists for — `X_POLL_ENABLED=false` left
+   *     on, which makes every run exit 0 while writing nothing.
+   *   **If the poll cadence changes, revisit these**: they were widened from
+   *   12h/36h when the floor went from 25 minutes to 4 hours.
    *
    * Tune here, never in the evaluation code. Loosen if the dot cries wolf; tighten
    * only with measured evidence that the feed really is writing more often.
    */
   freshness: {
     holderSnapshots: { warnHours: 6, failHours: 24 },
-    xPosts: { warnHours: 12, failHours: 36 },
+    xPosts: { warnHours: 24, failHours: 48 },
   },
 } as const;
 

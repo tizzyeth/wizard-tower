@@ -34,8 +34,15 @@ const sinceKey = (source: XSource) => `x:since_id:${source}`;
 /** kv_cache key holding the epoch-ms of the last poll that actually spent X API calls. */
 const LAST_POLL_KEY = "x:last_poll_at";
 
-/** Floor between paid polls. See the rationale at the call site in POST. */
-const MIN_POLL_INTERVAL_MS = 25 * 60_000;
+/**
+ * Floor between paid polls — 4 hours, set to this token's actual posting rate
+ * (~10 posts/week across both feeds, i.e. roughly one per 17h). Polling faster
+ * than the community posts buys nothing but X API spend. See the call site.
+ *
+ * Raise it back if activity picks up: this is the ONE number to change, and the
+ * cost scales exactly inversely (2 calls per poll).
+ */
+const MIN_POLL_INTERVAL_MS = 4 * 60 * 60_000;
 
 function unauthorized() {
   return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -125,16 +132,19 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   if (!db) return Response.json({ ok: false, error: "database unavailable" }, { status: 503 });
 
-  // X is the one PAID upstream in this stack, billed per call (plan §5 budgets
-  // ≲100 calls/day at 2 calls/run). The shared data cron fires every 15 minutes
-  // because the trade archive needs that cadence — but letting the poller ride
-  // along would be 96 runs/day = 192 calls, double the budget, for posts that
-  // are not twice as fresh. So the route enforces its own floor, exactly like
-  // /api/cron/snapshot does: the schedule serves the strictest consumer, and
-  // each route declares what it actually needs.
+  // X is the one PAID upstream in this stack, billed per call. The shared data
+  // cron fires every 15 minutes because the trade archive needs that cadence —
+  // but the poller must not ride along, so the route enforces its own floor,
+  // exactly like /api/cron/snapshot does: the schedule serves the strictest
+  // consumer, and each route declares what it actually needs.
   //
-  // 25 rather than 30 minutes so a run arriving slightly early still polls
-  // instead of deferring a whole cycle. `?force=1` overrides for manual runs.
+  // The floor is set by the COMMUNITY's posting rate, not by what feels fresh:
+  // at ~10 posts/week there is nothing new to fetch most of the time, and an
+  // empty poll still costs 2 calls. At 4h that is 12 calls/day, versus 192 if
+  // the poller followed the 15-minute schedule — a 16x saving for a feed whose
+  // newest item is typically hours old anyway. `?force=1` overrides for manual
+  // runs. (Product owner's call, 2026-07-25: "раз в 4 часа с текущей
+  // активностью… вернем чаще, если активность поднимется.")
   const force = new URL(request.url).searchParams.get("force") === "1";
   if (!force) {
     const last = (await kvGet<number>(LAST_POLL_KEY))?.value ?? null;

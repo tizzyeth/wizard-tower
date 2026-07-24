@@ -203,29 +203,34 @@ Vercel, deployed from `main`. Production env vars are set in the Vercel project.
 
 ### The three crons
 
-Vercel Hobby's cron allowance is too coarse for a 30-minute poll, so scheduling lives in **GitHub Actions**. Each workflow does nothing but `POST` a Bearer-gated route — all the real work, and the paid API key, stay server-side in the app.
+Vercel Hobby's cron allowance is too coarse, so scheduling lives in **GitHub Actions**. The workflow does nothing but `POST` Bearer-gated routes — all the real work, and every paid API key, stay server-side in the app.
 
-| Workflow | Schedule (UTC) | Route | Effect |
-|---|---|---|---|
-| `Holder snapshot (hourly)` | `0 * * * *` | `POST /api/cron/snapshot` | Helius scan → one `holder_snapshots` row |
-| `Prophecy Feed poll (every 30 min)` | `*/30 * * * *` | `POST /api/cron/social` | ~2 X API calls → upsert `x_posts` |
-| `Trade archive (every 15 min)` | `7,22,37,52 * * * *` | `POST /api/cron/trades` | pool trade windows → `trades`, deduped on `tx_hash` |
+**One schedule drives everything.** `Data crons (every 15 min)` (`7,22,37,52 * * * *`) POSTs all three cron routes in a single job, trades first. Offset off the quarter-hours on purpose: GitHub's scheduler is most congested, and most delayed, at the top of the hour.
 
-The trade archive is offset off the quarter-hours on purpose: GitHub's scheduler is most congested (and most delayed) at the top of the hour, where the other two already sit.
+| Route | Effect | Runs how often, really |
+|---|---|---|
+| `POST /api/cron/trades` | pool trade windows → `trades`, deduped on `tx_hash` | **every tick (15 min)** — sets the schedule |
+| `POST /api/cron/snapshot` | Helius scan → one `holder_snapshots` row | **≥50 min apart** (route-enforced floor) |
+| `POST /api/cron/social` | ~2 X API calls → upsert `x_posts` | **≥4 h apart** (route-enforced floor) |
 
-Both require, on the repo (Settings → Secrets and variables → Actions):
+> **The cadence you care about is in the route, not the cron.** The schedule serves its strictest consumer — the trade archive, whose missed windows are unrecoverable. The other two would only waste money (X is billed per call) or rows (a second holder census in the same hour says nothing new), so each declares its own floor in code and returns `{ "skipped": true }` when a tick arrives early. `?force=1` overrides either. **To change how often X is polled, edit `MIN_POLL_INTERVAL_MS` in `app/api/cron/social/route.ts` — not the cron expression.**
+
+The per-route workflows (`snapshot.yml`, `social.yml`, `trades-archive.yml`) still exist but carry **no schedule** — they are dispatch-only, for debugging and backfill.
+
+Requires, on the repo (Settings → Secrets and variables → Actions):
 
 - **Variable** `SITE_URL` = production origin, e.g. `https://wizard-tower-nu.vercel.app`
 - **Secret** `CRON_SECRET` = the *same* value as in Vercel
 
-Both use `concurrency` groups so two runs never overlap, and both fail loudly (`::error::`) on a non-200.
+A `concurrency` group prevents overlapping runs; a non-200 from any route fails the job loudly (`::error::`) and opens a `cron-failure` issue.
 
 **Trigger a run manually:**
 
 ```bash
-gh workflow run "Holder snapshot (hourly)"
-gh workflow run "Prophecy Feed poll (every 30 min)"
-gh workflow run "Trade archive (every 15 min)"
+gh workflow run "Data crons (every 15 min)"     # all three routes
+gh workflow run "Holder snapshot (manual)"      # or just one
+gh workflow run "Prophecy Feed poll (manual)"
+gh workflow run "Trade archive (manual)"
 ```
 
 Or hit the route directly (this spends real API credits):
@@ -463,11 +468,14 @@ A bad `DATABASE_URL` degrades rather than breaks: `getDb()` returns null, the ho
 
 Cadence is set in **three independent places**. Changing one does not change the others — and only the first two cost money or quota.
 
-### 1. Cron schedules (the expensive ones)
+### 1. Cron cadence (the expensive one) — **two layers, edit the right one**
 
-`.github/workflows/snapshot.yml` → `cron: "0 * * * *"` (hourly)
-`.github/workflows/social.yml` → `cron: "*/30 * * * *"` (every 30 min)
-`.github/workflows/trades-archive.yml` → `cron: "7,22,37,52 * * * *"` (every 15 min)
+| Layer | Where | Governs |
+|---|---|---|
+| The schedule | `.github/workflows/data-crons.yml` → `cron: "7,22,37,52 * * * *"` | how often the **trade archive** ingests. Bound by GeckoTerminal's ≤300-trade window, so this is a correctness limit, not a preference. |
+| Per-route floors | `MIN_SNAPSHOT_INTERVAL_MS` in `app/api/cron/snapshot/route.ts` (**50 min**) · `MIN_POLL_INTERVAL_MS` in `app/api/cron/social/route.ts` (**4 h**) | how often the census and the **paid** X poll actually do work. A tick arriving early returns `{ "skipped": true, "calls": 0 }`. |
+
+Raising the schedule speeds up **only** the trade archive. To poll X more or less often, change its floor — that is the number that costs money.
 
 ### 2. Server cache TTLs (upstream request rate)
 
@@ -495,19 +503,21 @@ The server cache is the real throttle on upstream load: a hundred visitors polli
 The only pay-per-use source. Current steady state:
 
 ```
-2 calls/run  ×  48 runs/day  =  96 calls/day   (within the plan's ≲100 budget)
+2 calls/poll  ×  6 polls/day  =  12 calls/day   (floor: 4h, in app/api/cron/social/route.ts)
 ```
 
 Two calls because the official user id is **pinned** in `config/token.ts` (`X.officialUserId`), so a run spends one call on the official timeline and one on the community search — no username→id lookup. Both are narrowed with `since_id` from `kv_cache`, so a run returns only genuinely new posts. Leave `officialUserId` null and the first run spends one extra bootstrap call, then caches it.
 
-**Cadence is inversely proportional to cost:**
+**Cost is inversely proportional to the floor** (`MIN_POLL_INTERVAL_MS`):
 
-| Cron | Runs/day | Calls/day |
+| Floor | Polls/day | Calls/day |
 |---|---|---|
-| `*/15 * * * *` | 96 | **192** |
-| `*/30 * * * *` ← current | 48 | **96** |
-| `0 * * * *` | 24 | **48** |
-| `0 */2 * * *` | 12 | **24** |
+| 15 min (i.e. every tick) | 96 | **192** |
+| 30 min | 48 | **96** |
+| 1 h | 24 | **48** |
+| **4 h ← current** | **6** | **12** |
+
+Set at 4h on 2026-07-25 to match actual activity: the two feeds together produce ~10 posts/week, so most polls found nothing and paid 2 calls to learn it. Raise it (lower the number) if the token gets busier — the feed's freshness bands in `THRESHOLDS.freshness.xPosts` were widened to 24h/48h to match and should be revisited alongside it.
 
 **Halving the interval doubles the bill.** Before speeding it up, check whether the feed actually moves that fast — a community that posts a few times a day gains nothing from a 15-minute poll.
 
@@ -628,7 +638,7 @@ Honest caveats. Several are surfaced in the UI too — the dashboard's whole pre
 ## What's still on you
 
 - **Custom domain — not set up.** No domain has been chosen. When you pick one: add it in Vercel → Project → Domains, point DNS at Vercel, then update **`NEXT_PUBLIC_SITE_URL`** (canonical + OG URLs) *and* the GitHub Actions **`SITE_URL`** variable, and redeploy. Entirely optional — the `.vercel.app` URL works fine.
-- **X API polling is floored at 25 minutes inside the route**, not by the cron schedule. The shared cron ticks every 15 minutes because the trade archive needs it, but X is the one paid upstream (2 calls/run, budgeted at ≲100/day in the plan), so `/api/cron/social` skips a tick that arrives too soon and logs `calls: 0`. `?force=1` overrides. The holder census does the same at 50 minutes. If you change the cron cadence, these floors are what actually govern cost and row growth.
+- **X API polling is floored at 4 hours inside the route**, not by the cron schedule. The shared cron ticks every 15 minutes because the trade archive needs it, but X is the one paid upstream (2 calls/run, ~12 calls/day at this floor), so `/api/cron/social` skips a tick that arrives too soon and logs `calls: 0`. `?force=1` overrides. The holder census does the same at 50 minutes. If you change the cron cadence, these floors are what actually govern cost and row growth.
 - **Watch the first 24h of crons.** The snapshot and social workflows are active and have succeeded end to end (Actions → prod route → Helius → Neon). Confirm the *scheduled* runs land too: `gh run list --limit 20`. See the schedule-lag note in [Operations](#the-three-crons).
 - **The trade archive workflow is new and has never run on a schedule.** `trades-archive.yml` needs no new secrets (it reuses `SITE_URL` + `CRON_SECRET`), but confirm the first scheduled runs land — a missed window is unrecoverable. Watch for `COVERAGE GAP` in the run logs, and re-check the Actions minutes bill after a full month against the [cadence math](#trade-archive-cadence-math).
 - **Revisit the Origin Scroll copy** once the creator-fee attribution review concludes.

@@ -69,7 +69,7 @@ export function TheProphecyFeed({
       id="feed"
       title="The Prophecy Feed"
       subtitle="posts from X"
-      source={`X API · ${X.officialUsername} · 30m poller`}
+      source={`X API · ${X.officialUsername} · 4h poller`}
       controls={<FeedTabs value={tab} onChange={setTab} />}
       className={className}
     >
