@@ -48,3 +48,6 @@ next-env.d.ts
 
 # agent worktrees
 .claude/worktrees/
+
+# Agent handoff notes — local working document, never published
+HANDOFF.md
