@@ -17,7 +17,7 @@ async function fetchSocial(source: XSource): Promise<SocialResult> {
 }
 
 /**
- * One feed of The Prophecy Feed. A fresh post lands each poll interval (≤30 min via
+ * One feed of The Prophecy Feed. A fresh post lands within one poll cycle (≤4h via
  * the cron), so the client polls every 60s — quick to pick up a new post once it is
  * in our DB, and it only ever hits OUR /api/social (never X). `initial` is the
  * server-rendered seed so the active tab paints real posts with no skeleton flash.
