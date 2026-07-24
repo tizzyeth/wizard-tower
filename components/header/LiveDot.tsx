@@ -38,7 +38,7 @@ export type FreshnessSignal = {
 function phrase(feed: FeedHealth): string {
   return feed.key === "holderSnapshots"
     ? `holder snapshots last recorded ${feed.ageHours}h ago (expected hourly)`
-    : `the prophecy feed last stored a post ${feed.ageHours}h ago (polled every 30 minutes)`;
+    : `the prophecy feed last stored a post ${feed.ageHours}h ago (polled about every 30 minutes)`;
 }
 
 /**

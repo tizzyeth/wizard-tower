@@ -102,10 +102,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // The census is nominally hourly, but the shared data cron fires every 30 min
+  // The census is nominally hourly, but the shared data cron fires every 15 min
   // (one Actions job for all three routes — see .github/workflows/data-crons.yml
   // and the free-tier arithmetic there). Rather than let the cadence drift to
-  // 30 min — which would make "hourly" a lie in a dozen places and double the
+  // 15 min — which would make "hourly" a lie in a dozen places and multiply the
   // stored rows for no new information — the route itself enforces the interval.
   //
   // Server-side and data-driven, NOT minute-gated in YAML: GitHub's scheduler is

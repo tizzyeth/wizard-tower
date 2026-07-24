@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
   }
   const result = await getSocial(source);
   return Response.json(result, {
-    // The client polls every 60s; a fresh post lands each poll interval (≤30 min).
+    // The client polls every 60s; a fresh post lands each poll interval (≤30 min:
+    // the shared cron ticks every 15, the route itself floors paid polls at 25).
     headers: { "Cache-Control": "no-store, max-age=0" },
   });
 }

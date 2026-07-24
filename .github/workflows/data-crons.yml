@@ -1,40 +1,33 @@
-name: Data crons (every 30 min)
+name: Data crons (every 15 min)
 
 # The single scheduled job that keeps every data pipeline alive: it POSTs all
 # three Bearer-gated cron routes in one run. The per-route workflows still exist
 # for manual dispatch (debugging, backfill) but no longer carry a schedule.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# WHY ONE JOB — the free-tier arithmetic
+# WHY ONE JOB, AND WHY EVERY 15 MINUTES
 #
-# GitHub bills each Actions job ROUNDED UP TO A WHOLE MINUTE, and a private repo
-# on the Free plan gets 2,000 minutes/month. These routes each take ~10-20s, so
-# every run of every workflow costs a full billed minute regardless.
+# One job because GitHub bills each Actions job ROUNDED UP TO A WHOLE MINUTE.
+# These routes take ~10-20s each, so three separate schedules would burn three
+# billed minutes per tick to do ~40 seconds of work. Batching them is simply
+# cheaper for identical behaviour, and it keeps one place to reason about order.
 #
-#   As three separate schedules:
-#     snapshot  hourly    =   730 runs/mo
-#     social    */30      = 1,459 runs/mo
-#     trades    */15      = 2,918 runs/mo
-#                           ─────────────
-#                           5,107 billed min/mo  →  2.6x OVER the free tier.
-#     (Even the two pre-archive crons alone came to 2,190 — already over.)
+# (This repo is PUBLIC, so Actions minutes are free and unlimited — the cadence
+# below is chosen purely for correctness. While the repo was private the same
+# three schedules cost 5,107 billed min/mo against a 2,000 free tier, which is
+# what forced the consolidation; that constraint no longer binds, but the single
+# job is kept because it is the better shape regardless.)
 #
-#   As one job at */30:   1,459 billed min/mo  →  fits, with headroom.
+# The cadence is set by the TRADE ARCHIVE, the only route whose missed data is
+# unrecoverable. GeckoTerminal's /trades is a window of at most 300 trades AND
+# 24h per pool; whatever leaves it before we read is gone for good. At the
+# busiest day in this token's history (~246 trades/h) a pool fills 300 in
+# ~73 minutes, so:
 #
-# The quota is not a soft limit: once it is spent, scheduled workflows simply
-# stop running until the next billing cycle, and the dashboard's data silently
-# freezes. (GET /api/health + the header dot would catch it — see lib/health.ts —
-# but "caught quickly" is worse than "did not happen".)
+#   */30 → 2.4x headroom   (what we ran while minutes were rationed)
+#   */15 → 4.9x headroom   ← current; survives even a 60-minute scheduler delay
 #
-# WHY */30 IS STILL SAFE FOR THE TRADE ARCHIVE — the binding constraint here is
-# correctness, not cost: GeckoTerminal's /trades is a window of at most 300 trades
-# AND 24h per pool, and whatever leaves it before we read is unrecoverable. At the
-# busiest day in this token's history (~246 trades/h) a pool fills 300 in ~73 min,
-# so a 30-minute cadence keeps ~2.4x headroom and still survives a scheduler that
-# runs late. See .github/workflows/trades-archive.yml for the full derivation.
-#
-# If the repo is ever made PUBLIC, Actions minutes become free and unlimited —
-# at that point this can drop back to */15 (4.9x headroom) or split apart again.
+# See .github/workflows/trades-archive.yml for the full derivation.
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # Requires, on the repo (Settings → Secrets and variables → Actions):
@@ -46,7 +39,7 @@ on:
   schedule:
     # Offset off :00/:30 deliberately — GitHub's scheduler is most congested, and
     # most delayed, at the top of the hour.
-    - cron: "7,37 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 # Never overlap two runs; let an in-flight one finish rather than cancel it.
@@ -135,5 +128,5 @@ jobs:
       issues: write
     uses: ./.github/workflows/cron-failure-issue.yml
     with:
-      workflow-name: Data crons (every 30 min)
+      workflow-name: Data crons (every 15 min)
       route: ${{ needs.run.outputs.failed || '/api/cron/* — see the run log' }}
