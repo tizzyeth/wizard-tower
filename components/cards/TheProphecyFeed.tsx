@@ -63,6 +63,9 @@ export function TheProphecyFeed({
   const active = tab === "official" ? official : community;
   const stale = active.degraded || active.result.stale;
   const posts = active.result.data?.posts ?? [];
+  // Promotional posts dropped by lib/metrics/spam.ts. Shown, never silent: a feed
+  // that quietly removes things is less trustworthy than one that says it did.
+  const hidden = active.result.data?.hiddenCount ?? 0;
 
   return (
     <CardFrame
@@ -75,7 +78,7 @@ export function TheProphecyFeed({
     >
       {stale && <StaleBanner dataAsOf={active.result.dataAsOf} />}
 
-      {tab === "community" && <CovenNote />}
+      {tab === "community" && <CovenNote hidden={hidden} />}
 
       {posts.length === 0 ? (
         <EmptyFeed tab={tab} />
@@ -136,7 +139,7 @@ function FeedTabs({ value, onChange }: { value: XSource; onChange: (v: XSource) 
 
 // ── The Coven honesty note (fallback C is an approximation) ──────────────────
 
-function CovenNote() {
+function CovenNote({ hidden }: { hidden: number }) {
   return (
     <p className="mb-4 rounded border border-violet/20 bg-violet/[0.05] px-3 py-2 text-[11px] leading-relaxed text-muted">
       <span aria-hidden className="text-violet-soft">
@@ -145,6 +148,14 @@ function CovenNote() {
       The Coven scries every mention of{" "}
       <span className="font-mono text-violet-soft">$WIZARD</span> across X — an open
       reading of the wider circle, not the community’s private timeline.
+      {hidden > 0 && (
+        <>
+          {" "}
+          <span className="font-mono tabular-nums text-violet-soft">{hidden}</span>{" "}
+          {hidden === 1 ? "post" : "posts"} hidden as promotion — vote drives and
+          copy-pasted campaigns, not conversation.
+        </>
+      )}
     </p>
   );
 }
