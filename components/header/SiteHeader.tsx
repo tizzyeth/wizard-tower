@@ -3,6 +3,7 @@ import type { MarketResult } from "@/lib/sources/dexscreener";
 import type { HealthReport } from "@/lib/health";
 import { CaChip } from "./CaChip";
 import { CommandKButton } from "./CommandKButton";
+import { BuyMenu } from "./BuyMenu";
 import { LiveDot } from "./LiveDot";
 import { PriceTicker } from "./PriceTicker";
 
@@ -69,32 +70,7 @@ export function SiteHeader({
             ))}
           </nav>
 
-          <details className="relative">
-            <summary className="cursor-pointer list-none rounded border border-violet/50 bg-violet/15 px-3 py-1.5 text-xs font-semibold text-violet-soft transition-colors hover:bg-violet/25 [&::-webkit-details-marker]:hidden">
-              Buy ✦
-            </summary>
-            <div className="wiz-card absolute right-0 top-full z-50 mt-2 w-56 p-2">
-              <a
-                href={LINKS.buy.pumpFun}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded px-3 py-2 text-sm transition-colors hover:bg-violet/15"
-              >
-                pump.fun swap
-              </a>
-              <a
-                href={LINKS.buy.jupiter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded px-3 py-2 text-sm transition-colors hover:bg-violet/15"
-              >
-                Jupiter
-              </a>
-              <p className="wiz-caption px-3 pb-1 pt-2">
-                Outbound links only — this site never touches your wallet.
-              </p>
-            </div>
-          </details>
+          <BuyMenu />
 
           <LiveDot health={health} />
         </div>

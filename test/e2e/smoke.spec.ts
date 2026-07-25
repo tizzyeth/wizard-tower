@@ -98,6 +98,43 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
   });
 
   /**
+   * The Buy menu, reported broken from real use and fixed 2026-07-26. Its panel
+   * carried both `.wiz-card` and `absolute`; `.wiz-card` declares
+   * `position: relative` and wins the cascade, so the panel dropped into normal
+   * flow, stretched the header row to 210px and shoved its contents off-screen.
+   * It also could not be dismissed by clicking away.
+   */
+  test("the Buy menu opens below the button without moving the header", async ({ page }) => {
+    await mockApiRoutes(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // "Buys" is also a button (the tape's side filter) — scope to the header.
+    const buy = page.locator("header").getByRole("button", { name: "Buy ✦" });
+    const menu = page.getByRole("menu", { name: /where to buy/i });
+    const headerRow = page.locator("header .ml-auto").first();
+
+    const rowBefore = await headerRow.boundingBox();
+    await buy.click();
+    await expect(menu).toBeVisible();
+
+    // The panel must float: opening it may not change the header row's height.
+    const rowAfter = await headerRow.boundingBox();
+    expect(rowAfter?.height).toBeCloseTo(rowBefore?.height ?? 0, 0);
+
+    // …and it must sit below the button, fully on screen.
+    const buyBox = await buy.boundingBox();
+    const menuBox = await menu.boundingBox();
+    expect(menuBox!.y).toBeGreaterThanOrEqual(buyBox!.y + buyBox!.height);
+    expect(menuBox!.y).toBeGreaterThanOrEqual(0);
+
+    await expect(page.getByRole("menuitem", { name: /axiom/i })).toBeVisible();
+
+    // Dismisses by clicking away.
+    await page.mouse.click(30, 400);
+    await expect(menu).toBeHidden();
+  });
+
+  /**
    * Two dismissal bugs reported from real use, fixed 2026-07-25:
    *   • the backdrop swallowed clicks meant for "outside the dialog", so clicking
    *     away never closed the palette;

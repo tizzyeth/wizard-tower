@@ -80,7 +80,9 @@ export function TheProphecyFeed({
       {posts.length === 0 ? (
         <EmptyFeed tab={tab} />
       ) : (
-        <ol className="space-y-4">
+        // Posts carry media, so this card grew taller than anything beside it.
+        // Same treatment as the trade tape: cap and scroll inside the card.
+        <ol className="max-h-[34rem] space-y-4 overflow-y-auto pr-1">
           {posts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
