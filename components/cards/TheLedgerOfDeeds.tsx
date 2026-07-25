@@ -76,7 +76,10 @@ export function TheLedgerOfDeeds({
         // Capping it keeps the bento honest — every deed is still here, reached by
         // scrolling the card rather than the page. The header row stays pinned so
         // the columns stay readable mid-scroll.
-        <div className="-mx-1 max-h-[28rem] overflow-y-auto overflow-x-auto px-1">
+        // `relative` for the same reason as the Prophecy Feed's list: it makes
+        // this the containing block, so absolutely-positioned descendants are
+        // clipped here instead of stretching the document.
+        <div className="relative -mx-1 max-h-[28rem] overflow-y-auto overflow-x-auto px-1">
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-panel">
               <tr className="text-[10px] uppercase tracking-[0.12em] text-muted">

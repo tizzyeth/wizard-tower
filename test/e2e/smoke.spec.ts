@@ -98,6 +98,67 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
   });
 
   /**
+   * Reported 2026-07-26: thousands of pixels of scrollable emptiness below the
+   * footer. Cause: each post/row carries an absolutely-positioned `sr-only`
+   * span, and an absolute element is only clipped by an overflow ancestor that
+   * is ALSO its containing block. The capped scroll containers were static, so
+   * the spans resolved against the card section instead, laid out at full
+   * height, and stretched the document by ~9,000px.
+   *
+   * This asserts the invariant rather than the mechanism: nothing scrollable
+   * may exist meaningfully below the footer.
+   */
+  test("the page ends at the footer — no scrollable void beneath it", async ({ page }) => {
+    await mockApiRoutes(page);
+    // The shared fixture holds 3 posts, which fit inside the capped list and so
+    // could never reproduce this. Override with enough posts to overflow it —
+    // the overflow IS the condition under test.
+    await page.route("**/api/social**", async (route) => {
+      const posts = Array.from({ length: 40 }, (_, i) => ({
+        id: `flood-${i}`,
+        source: "official",
+        authorHandle: "swizardcore",
+        authorName: "SMOKING WIZARD",
+        authorAvatarUrl: null,
+        text: `post ${i} — ${"filler ".repeat(20)}`,
+        createdAt: Date.now() - i * 3_600_000,
+        likes: i,
+        reposts: 0,
+        replies: 0,
+        media: [],
+        url: "https://x.com/swizardcore",
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          stale: false,
+          dataAsOf: Date.now(),
+          data: { source: "official", posts, lastFetchedAt: Date.now(), hiddenCount: 0 },
+        }),
+      });
+    });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // Guard the guard: the list must actually be overflowing, or this proves nothing.
+    const overflowing = await page.evaluate(() => {
+      const ol = document.querySelector("#feed ol");
+      return !!ol && ol.scrollHeight > ol.clientHeight + 200;
+    });
+    expect(overflowing, "the feed list must overflow for this test to mean anything").toBe(true);
+
+    const slack = await page.evaluate(() => {
+      const footer = document.querySelector("footer")!;
+      const footerBottom = footer.getBoundingClientRect().bottom + window.scrollY;
+      return document.documentElement.scrollHeight - footerBottom;
+    });
+
+    // A little trailing margin is normal; a screenful is not.
+    expect(slack).toBeLessThan(200);
+  });
+
+  /**
    * The Buy menu, reported broken from real use and fixed 2026-07-26. Its panel
    * carried both `.wiz-card` and `absolute`; `.wiz-card` declares
    * `position: relative` and wins the cascade, so the panel dropped into normal
