@@ -82,7 +82,14 @@ export function TheProphecyFeed({
       ) : (
         // Posts carry media, so this card grew taller than anything beside it.
         // Same treatment as the trade tape: cap and scroll inside the card.
-        <ol className="max-h-[34rem] space-y-4 overflow-y-auto pr-1">
+        // `relative` is load-bearing, not decoration: each post carries an
+        // absolutely-positioned `sr-only` span, and an absolutely-positioned
+        // element is only clipped by an overflow ancestor that is also its
+        // CONTAINING BLOCK. Left static, this list was not — the spans resolved
+        // against the card `section` (`.wiz-card` is relative), laid out at full
+        // height outside the scroller, and added ~9,000px of scrollable void
+        // below the footer.
+        <ol className="relative max-h-[34rem] space-y-4 overflow-y-auto pr-1">
           {posts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
