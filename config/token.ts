@@ -259,6 +259,9 @@ export const LINKS = {
   buy: {
     pumpFun: `https://pump.fun/coin/${TOKEN.mint}`,
     jupiter: `https://jup.ag/swap/SOL-${TOKEN.mint}`,
+    /** Axiom referral link (the owner's). NOTE: this is the one monetised link
+     *  on the site — see the Vercel Hobby non-commercial caveat in the README. */
+    axiom: "https://axiom.trade/@tizzywizz",
   },
   explorers: {
     solscan: `https://solscan.io/token/${TOKEN.mint}`,

@@ -60,6 +60,10 @@ body {
 
 /* ── Card frame ─────────────────────────────────────────────── */
 
+/* NOTE: this `position: relative` beats Tailwind's `.absolute` on the same
+   element (equal specificity, and this component layer wins the cascade). To
+   float a card — a dropdown, a popover — put the positioning utilities on a
+   WRAPPER and `.wiz-card` on the child. See components/header/BuyMenu.tsx. */
 .wiz-card {
   position: relative;
   background-color: var(--color-panel);

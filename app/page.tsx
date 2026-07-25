@@ -126,65 +126,18 @@ export default async function Home({
           The Wizard’s Tower — live $WIZARD due-diligence terminal on Solana
         </h1>
 
-        {/* 1 · The Wizard's Ledger — hero market card (live · M1 + holder count M4) */}
-        <WizardsLedger
-          initial={initialMarket}
-          initialHolders={initialHolders}
-          ath={ath}
-          className="col-span-12"
-        />
-
-        {/* 2 · The Scrying Glass — price chart (live · M2) */}
-        <TheScryingGlass
-          initialMarket={initialMarket}
-          initialOhlcv={initialOhlcv}
-          className="col-span-12 lg:col-span-8"
-        />
-
-        {/* 3 · Council of Holders — holder distribution & concentration (live · M4) */}
-        <CouncilOfHolders initial={initialHolders} className="col-span-12 lg:col-span-4" />
-
-        {/* 4 · The Cauldrons — pools & liquidity (live · M1) */}
-        <TheCauldrons
-          initial={initialMarket}
-          initialSafety={initialSafety}
-          className="col-span-12 lg:col-span-6"
-        />
-
-        {/* 5 · The Ledger of Deeds — unified trade tape (live · M3) */}
-        <TheLedgerOfDeeds initial={initialTrades} className="col-span-12 lg:col-span-6" />
-
-        {/* 6 · Flow of Mana — volume & momentum (live · M3) */}
-        <FlowOfMana
-          initialTrades={initialTrades}
-          initialDaily={initialDaily}
-          pool={seedPool}
-          className="col-span-12 lg:col-span-5"
-        />
-
-        {/* 7 · Wards & Protections — safety checklist (live · M5) */}
-        <WardsAndProtections
-          initial={initialSafety}
-          initialHolders={initialHolders}
-          launchedAt={launchedAt}
-          className="col-span-12 lg:col-span-7"
-        />
-
-        {/* 8 · The Prophecy Feed — X posts (live · M6) */}
-        <TheProphecyFeed
-          initialOfficial={initialOfficial}
-          initialCommunity={initialCommunity}
-          className="col-span-12 lg:col-span-7"
-        />
-
-        {/* 9 · The Origin Scroll — lore/about (static, real copy) */}
+        {/* 1 · The Origin Scroll — what this token is, before any number (static copy).
+            Full width at the top: it is the preamble a first-time visitor needs, and
+            three short paragraphs read as columns here rather than as a stretched
+            line. It also frees the tall Prophecy Feed from being paired with a very
+            short card, which left a column of dead space. */}
         <CardFrame
           id="origin"
           title="The Origin Scroll"
           subtitle="what $WIZARD actually is"
-          className="col-span-12 lg:col-span-5"
+          className="col-span-12"
         >
-          <div className="space-y-3 text-sm leading-relaxed">
+          <div className="grid gap-x-8 gap-y-3 text-sm leading-relaxed lg:grid-cols-3">
             <p>
               Wizardcore is the creation of{" "}
               <a
@@ -216,10 +169,55 @@ export default async function Home({
             </p>
           </div>
         </CardFrame>
-
-        {/* 10 · Mimo's Tribute — creator-fee route (M9, link-out variant) */}
+        {/* 2 · The Wizard's Ledger — hero market card (live · M1 + holder count M4) */}
+        <WizardsLedger
+          initial={initialMarket}
+          initialHolders={initialHolders}
+          ath={ath}
+          className="col-span-12"
+        />
+        {/* 3 · The Scrying Glass — price chart (live · M2) */}
+        <TheScryingGlass
+          initialMarket={initialMarket}
+          initialOhlcv={initialOhlcv}
+          className="col-span-12 lg:col-span-8"
+        />
+        {/* 4 · Council of Holders — holder distribution & concentration (live · M4) */}
+        <CouncilOfHolders
+          initial={initialHolders}
+          className="col-span-12 lg:col-span-4 lg:row-span-2"
+        />
+        {/* 5 · The Ledger of Deeds — sits under the chart so the tall holder
+            column has a neighbour; scrolls internally rather than running past it */}
+        <TheLedgerOfDeeds initial={initialTrades} className="col-span-12 lg:col-span-8" />
+        {/* 6 · The Cauldrons — pools & liquidity (live · M1) */}
+        <TheCauldrons
+          initial={initialMarket}
+          initialSafety={initialSafety}
+          className="col-span-12 lg:col-span-6"
+        />
+        {/* 7 · Flow of Mana — volume & momentum (live · M3) */}
+        <FlowOfMana
+          initialTrades={initialTrades}
+          initialDaily={initialDaily}
+          pool={seedPool}
+          className="col-span-12 lg:col-span-6"
+        />
+        {/* 8 · Wards & Protections — safety checklist (live · M5) */}
+        <WardsAndProtections
+          initial={initialSafety}
+          initialHolders={initialHolders}
+          launchedAt={launchedAt}
+          className="col-span-12 lg:col-span-7"
+        />
+        {/* 9 · Mimo's Tribute — creator-fee route (M9, link-out variant) */}
         <MimosTribute route={creatorFeeRoute} className="col-span-12 lg:col-span-5" />
-
+        {/* 10 · The Prophecy Feed — X posts (live · M6) */}
+        <TheProphecyFeed
+          initialOfficial={initialOfficial}
+          initialCommunity={initialCommunity}
+          className="col-span-12 lg:col-span-5"
+        />
         {/* 11 · The Wizard's Verdict — gold rubric callout (live · M7) */}
         <TheWizardsVerdict
           initialMarket={initialMarket}

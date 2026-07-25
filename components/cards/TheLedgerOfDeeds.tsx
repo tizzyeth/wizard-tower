@@ -71,9 +71,14 @@ export function TheLedgerOfDeeds({
       {shown.length === 0 ? (
         <EmptyLedger filtersActive={filtersActive} hasAny={result.trades.length > 0} />
       ) : (
-        <div className="-mx-1 overflow-x-auto px-1">
+        // The tape is the longest card on the page: unbounded it ran hundreds of
+        // rows past its neighbours and left a column of dead space beside them.
+        // Capping it keeps the bento honest — every deed is still here, reached by
+        // scrolling the card rather than the page. The header row stays pinned so
+        // the columns stay readable mid-scroll.
+        <div className="-mx-1 max-h-[28rem] overflow-y-auto overflow-x-auto px-1">
           <table className="w-full min-w-[520px] border-collapse text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-panel">
               <tr className="text-[10px] uppercase tracking-[0.12em] text-muted">
                 <th className="pb-2 text-left font-medium">Time · UTC</th>
                 <th className="pb-2 text-left font-medium">Side</th>
