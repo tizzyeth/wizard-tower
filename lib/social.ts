@@ -14,6 +14,8 @@ import { desc, eq, count } from "drizzle-orm";
 import { getDb } from "@/db";
 import { xPosts } from "@/db/schema";
 import { postingCadencePerWeek } from "@/lib/metrics/cadence";
+import { filterPromotional } from "@/lib/metrics/spam";
+import { X } from "@/config/token";
 import type { XSource, XMedia } from "@/lib/sources/x";
 
 /** Posts served per feed — a capped window, not the whole buffer. */
@@ -45,6 +47,8 @@ export type SocialData = {
   posts: SocialPost[];
   /** When the newest shown post was fetched by the poller (ms) — the freshness clock. */
   lastFetchedAt: number | null;
+  /** Promotional posts filtered out of this feed — shown in the UI, never silent. */
+  hiddenCount: number;
 };
 
 export type SocialResult = {
@@ -98,7 +102,15 @@ async function readFeed(source: XSource): Promise<SocialData | null> {
     return t != null && (max == null || t > max) ? t : max;
   }, null);
 
-  return { source, posts, lastFetchedAt };
+  // Drop coordinated promotion (vote-farming drives, listing campaigns) before
+  // the card ever sees it. Filtering happens HERE, on read, not in the poller:
+  // the table keeps everything, so tuning the rules re-filters history instead
+  // of needing a refetch of posts upstream may no longer serve. The official
+  // feed is not filtered — it is the project's own account by definition.
+  if (source !== "community") return { source, posts, lastFetchedAt, hiddenCount: 0 };
+
+  const { kept, hiddenCount } = filterPromotional(posts, X.spam);
+  return { source, posts: kept, lastFetchedAt, hiddenCount };
 }
 
 /**

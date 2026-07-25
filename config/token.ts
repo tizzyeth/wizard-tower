@@ -188,7 +188,59 @@ export const X = {
   communityId: X_COMMUNITY_ID,
   /** Community display name from the communities lookup (candidate B, HTTP 200). */
   communityName: "Smoking $WIZARD",
-  communityQuery: `"smoking wizard" OR $WIZARD -is:retweet`,
+  /**
+   * NOTE THE PARENTHESES. X search binds AND tighter than OR, so the earlier
+   * `"smoking wizard" OR $WIZARD -is:retweet` parsed as
+   * `"smoking wizard" OR ($WIZARD AND -is:retweet)` — the retweet filter applied
+   * to only half the query, and 12 of every 20 results came back as retweets of
+   * the same post (measured 2026-07-25). Grouping the alternatives fixes it: the
+   * same probe returned 0 retweets.
+   */
+  communityQuery: `("smoking wizard" OR $WIZARD) -is:retweet`,
+
+  /**
+   * Promotional-post rules for The Coven (see lib/metrics/spam.ts). An open
+   * cashtag search on a memecoin attracts coordinated shilling; these posts
+   * mention $WIZARD without saying anything about it.
+   *
+   * `patterns` are case-insensitive substrings — keep them SPECIFIC to promo
+   * mechanics ("vote matters", "listing id"), never to ordinary enthusiasm, or
+   * the filter starts eating the community it exists to show. The structural
+   * duplicate detector below is what catches campaigns nobody has seen yet, so
+   * this list does not need to be exhaustive.
+   */
+  spam: {
+    patterns: [
+      "vote matters",
+      "votes are needed",
+      "vote us",
+      "vote for us",
+      "moonshot",
+      "leaderboard",
+      "listing id",
+      "vote dashboard",
+      "airdrop",
+      "giveaway",
+      "follow and rt",
+      "follow + rt",
+      "dm me",
+      "dm for",
+      "presale",
+      "guaranteed return",
+      "100x",
+      "pump it",
+    ],
+    /** Repeat offenders. Add a handle only with a link to the offending post. */
+    blockedAuthors: [] as readonly string[],
+    /** Never filtered, whatever it posts. */
+    allowedAuthors: ["swizardcore"],
+    /**
+     * Distinct authors sharing one normalised text before it reads as a
+     * campaign. 2 is deliberate: strangers do not write the same 40+ character
+     * message independently, and waiting for a third copy shows the first two.
+     */
+    duplicateAuthorThreshold: 2,
+  },
 } as const;
 
 export const LINKS = {
