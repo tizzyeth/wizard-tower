@@ -98,6 +98,40 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
   });
 
   /**
+   * Two dismissal bugs reported from real use, fixed 2026-07-25:
+   *   • the backdrop swallowed clicks meant for "outside the dialog", so clicking
+   *     away never closed the palette;
+   *   • Escape was bound to the input, so once a stray click moved focus to
+   *     <body> the key reached nothing and the palette appeared stuck open.
+   */
+  test("the palette dismisses on a click outside, and on Escape without focus", async ({
+    page,
+  }) => {
+    await mockApiRoutes(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    const dialog = page.getByRole("dialog", { name: /command palette/i });
+    const openPalette = async () => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await expect(dialog).toBeVisible();
+    };
+
+    // 1. A click well clear of the dialog closes it.
+    await openPalette();
+    await page.mouse.click(20, 20);
+    await expect(dialog).toBeHidden();
+
+    // 2. Escape closes even when focus is not in the search field. Clicking the
+    //    dialog's own footer blurs the input without dismissing the palette.
+    await openPalette();
+    await dialog.getByText(/navigate/i).click();
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole("combobox", { name: /search commands/i })).not.toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
+  /**
    * Plan §10 backlog ("Bubblemaps iframe embed") resolved as a link-out: Bubblemaps
    * serves a `frame-ancestors` allow-list that excludes this origin, so a framed map
    * is a browser block page in production. This asserts the honest alternative — an

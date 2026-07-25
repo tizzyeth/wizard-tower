@@ -156,11 +156,22 @@ export function CommandPalette() {
   }, []);
 
   // Global open shortcut (cmd/ctrl+K) + the header affordance event.
+  //
+  // Escape is handled HERE, on the window, not only on the input. The input's own
+  // handler covers the common case, but focus does not always live there: clicking
+  // the backdrop (or anything else outside the field) moves it to <body>, and from
+  // then on a key pressed anywhere never reaches the input — the palette looked
+  // stuck open. Listening on the window makes Escape work regardless of focus.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         if (!openRef.current) openPalette(); // already open → the dialog owns its keys
+        return;
+      }
+      if (e.key === "Escape" && openRef.current) {
+        e.preventDefault();
+        closePalette();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -169,7 +180,7 @@ export function CommandPalette() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener(OPEN_COMMAND_EVENT, openPalette);
     };
-  }, [openPalette]);
+  }, [openPalette, closePalette]);
 
   // Focus the input when opened; lock body scroll while open.
   useEffect(() => {
@@ -314,10 +325,16 @@ export function CommandPalette() {
       className="fixed inset-0 z-[80] flex items-start justify-center px-4 pt-[12vh]"
       role="presentation"
       onMouseDown={(e) => {
+        // Covers the padding strip around the dialog; the backdrop below covers
+        // the rest. Both close — clicking anywhere off the dialog dismisses it.
         if (e.target === e.currentTarget) closePalette();
       }}
     >
-      <div aria-hidden className="absolute inset-0 bg-canvas/80 backdrop-blur-sm" />
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-canvas/80 backdrop-blur-sm"
+        onMouseDown={closePalette}
+      />
 
       <div
         role="dialog"
