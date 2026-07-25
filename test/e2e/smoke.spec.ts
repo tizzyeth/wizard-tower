@@ -259,15 +259,32 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     expect(consoleErrors, "no console errors").toEqual([]);
   });
 
-  test("the grain overlay toggles off from the palette", async ({ page }) => {
+  test("the VHS overlay toggles off from the palette", async ({ page }) => {
     await mockApiRoutes(page);
     await page.goto("/", { waitUntil: "networkidle" });
 
     // Default is on (no attribute); toggling sets data-grain="off" on <html>.
     await expect(page.locator("html")).not.toHaveAttribute("data-grain", "off");
     await page.getByRole("button", { name: /open command palette/i }).click();
+    // Searched by an old keyword on purpose: "grain" must keep finding it now
+    // that the command is labelled "VHS overlay".
     await page.getByRole("combobox", { name: /search commands/i }).fill("grain");
-    await page.getByRole("option", { name: /film grain/i }).first().click();
+    await page.getByRole("option", { name: /vhs overlay/i }).first().click();
     await expect(page.locator("html")).toHaveAttribute("data-grain", "off");
+
+    // The overlay's layers must actually be painting when it is on.
+    await page.reload({ waitUntil: "networkidle" });
+    const painted = await page.evaluate(() => {
+      const el = document.querySelector(".wiz-grain");
+      if (!el) return null;
+      const before = getComputedStyle(el, "::before");
+      const after = getComputedStyle(el, "::after");
+      return {
+        grain: before.backgroundImage.includes("svg"),
+        scanlines: after.backgroundImage.includes("repeating-linear-gradient"),
+        track: !!document.querySelector(".wiz-vhs-track"),
+      };
+    });
+    expect(painted).toEqual({ grain: true, scanlines: true, track: true });
   });
 });

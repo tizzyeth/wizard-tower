@@ -5,7 +5,7 @@
  *
  * Actions: copy CA · open Solscan / DexScreener / GeckoTerminal / RugCheck /
  * pump.fun / Bubblemaps · jump to any module (anchor ids live on every card) ·
- * toggle the film-grain overlay.
+ * toggle the VHS overlay (grain, scanlines, vignette, tracking band).
  *
  * Dependency-light on purpose (no `cmdk`): the needs here — a filtered list, arrow
  * navigation, a focus trap, and focus restore — are ~an accessible combobox, which
@@ -214,10 +214,10 @@ export function CommandPalette() {
       },
       {
         id: "toggle-grain",
-        label: grainOn ? "Turn film grain off" : "Turn film grain on",
+        label: grainOn ? "Turn VHS overlay off" : "Turn VHS overlay on",
         group: "Actions",
         hint: grainOn ? "on" : "off",
-        keywords: "grain texture film noise overlay",
+        keywords: "grain texture film noise overlay vhs scanlines crt tape retro",
         keepOpen: true,
         run: () => {
           const next = !grainIsOn();
