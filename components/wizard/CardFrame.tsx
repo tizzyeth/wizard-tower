@@ -19,6 +19,14 @@ type CardFrameProps = {
   /** Controls rendered top-right (timeframes, toggles, tabs). */
   controls?: ReactNode;
   variant?: "default" | "gold";
+  /**
+   * Make the body fill the card's height instead of sizing to its content.
+   * For a card whose neighbour in the bento row is taller, this is what lets an
+   * internally-scrolling list use the whole column rather than stopping short
+   * and leaving the rest of the card empty. The body becomes a flex child with
+   * `min-h-0`, so a `flex-1 overflow-y-auto` list inside it can actually shrink.
+   */
+  fill?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -30,6 +38,7 @@ export function CardFrame({
   source,
   controls,
   variant = "default",
+  fill = false,
   className = "",
   children,
 }: CardFrameProps) {
@@ -37,7 +46,9 @@ export function CardFrame({
     <section
       id={id}
       aria-label={title}
-      className={`wiz-card ${variant === "gold" ? "wiz-card-gold" : ""} scroll-mt-20 p-4 md:p-5 ${className}`}
+      className={`wiz-card ${variant === "gold" ? "wiz-card-gold" : ""} scroll-mt-20 p-4 md:p-5 ${
+        fill ? "flex flex-col" : ""
+      } ${className}`}
     >
       {CORNERS.map((corner) => (
         <span key={corner} aria-hidden className={`wiz-corner ${corner}`}>
@@ -62,7 +73,13 @@ export function CardFrame({
       <div className="wiz-rule my-3 text-[10px]">
         <span aria-hidden>✳</span>
       </div>
-      {children}
+      {fill ? (
+        // `min-h-0` is what allows a scrolling child to shrink below its content
+        // height; without it the flex child refuses to compress and the card grows.
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      ) : (
+        children
+      )}
     </section>
   );
 }

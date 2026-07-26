@@ -71,6 +71,7 @@ export function TheProphecyFeed({
       subtitle="posts from X"
       source={`X API · ${X.officialUsername} · 4h poller`}
       controls={<FeedTabs value={tab} onChange={setTab} />}
+      fill
       className={className}
     >
       {stale && <StaleBanner dataAsOf={active.result.dataAsOf} />}
@@ -89,11 +90,23 @@ export function TheProphecyFeed({
         // against the card `section` (`.wiz-card` is relative), laid out at full
         // height outside the scroller, and added ~9,000px of scrollable void
         // below the footer.
-        <ol className="relative max-h-[34rem] space-y-4 overflow-y-auto pr-1">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </ol>
+        // The list must TAKE the row's height without SETTING it. A plain
+        // `flex-1` list still reports its content height to the grid, so it grew
+        // the row to 10,000px and dragged its neighbour along; a fixed cap did
+        // the reverse and left the card half empty. Absolute positioning removes
+        // the list from layout entirely: the wrapper claims the leftover space,
+        // the row is sized by the taller card beside it, and the list fills
+        // whatever that turns out to be.
+        //
+        // `min-h-[22rem]` is the standalone floor — on mobile the bento is one
+        // column and there is no tall neighbour to inherit height from.
+        <div className="relative min-h-[22rem] min-h-0 flex-1">
+          <ol className="absolute inset-0 space-y-4 overflow-y-auto pr-1">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </ol>
+        </div>
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-violet/15 pt-3">

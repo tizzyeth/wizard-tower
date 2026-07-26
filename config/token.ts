@@ -165,6 +165,21 @@ export const THRESHOLDS = {
   },
 } as const;
 
+/**
+ * Who the creator-fee recipients are (Mimo's Tribute, §4 module 10).
+ *
+ * The chain proves the SPLIT — two accounts, 50/50, read live from pump.fun's
+ * fee-share program — but it cannot say whose wallets they are: they carry no
+ * on-chain label. These names come from the token team, confirmed by the
+ * product owner on 2026-07-26, and the card says so rather than implying the
+ * chain established them. Remove an entry and that recipient simply shows as an
+ * address again; nothing else breaks.
+ */
+export const FEE_RECIPIENT_LABELS: Record<string, string> = {
+  "3Ee23hHUyG6QdurRrFei2dGHiD1TwWnciVNtRughUYiC": "Mimo",
+  HyPT5NYEztNVKoJFr8Bf4mVs9ZqV4dccaeqmmqmF6Lnd: "Token team",
+};
+
 export const X_COMMUNITY_ID = "2031864427176476866";
 
 /**

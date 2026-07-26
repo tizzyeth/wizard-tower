@@ -1,17 +1,22 @@
 /**
- * Mimo's Tribute — creator-fee route (plan §4 module 10, M9).
+ * Mimo's Tribute — where creator fees actually go (plan §4 module 10, M9/M11).
  *
- * This is M9's LINK-OUT variant, and that is a deliberate result, not a stub.
- * The spike could reproduce the money (823.76 SOL cumulative, ~0.03% from
- * pump.fun's own figure) but could not attribute one lamport of it to Mimo by
- * name: the coin's on-chain "creator" is a pump.fun fee-SHARE program account
- * that forks the fee between anonymous recipients. Publishing a total under a
- * real person's name on that evidence is the invented figure M9 forbids. The
- * full reasoning, the reconciliation math, and the exact B→A upgrade path live
- * in the header of lib/sources/creator-fees.ts.
+ * M9 shipped this WITHOUT a total, on purpose: the coin's on-chain "creator" is
+ * a pump.fun fee-SHARE program account that forks every lamport between two
+ * accounts, and nothing on-chain says whose they are. Printing a sum under a
+ * real person's name on that evidence would have been a claim we could not
+ * support.
  *
- * So the card's hero is the ROUTE rather than a number — because the fork in the
- * route IS the reason there is no number. Everything shown is read live from
+ * The total is shown now (2026-07-26) because the missing half arrived from
+ * outside the chain: the token team identified both wallets and the product
+ * owner confirmed it. So the card states each source of belief separately — the
+ * chain proves the money and the split, the team names the wallets — rather
+ * than letting the reader assume one vouches for the other. Labels live in
+ * `FEE_RECIPIENT_LABELS` (config/token.ts); drop one and that recipient falls
+ * back to a bare address.
+ *
+ * The route is still the card's spine: the fork is the interesting part, and
+ * the total means little without it. Everything structural is read live from
  * chain state (the split is decoded per-request from the creator account), so
  * the card cannot drift into asserting a split that has since changed.
  *
@@ -22,8 +27,8 @@
 
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { fmtAddr } from "@/lib/format";
-import { LINKS } from "@/config/token";
-import type { CreatorFeeResult } from "@/lib/sources/creator-fees";
+import { FEE_RECIPIENT_LABELS, LINKS } from "@/config/token";
+import type { CreatorFeeResult, CreatorFeeTotal } from "@/lib/sources/creator-fees";
 
 function Solscan({ address, label }: { address: string; label?: string }) {
   return (
@@ -79,9 +84,12 @@ function Leg({
 
 export function MimosTribute({
   route,
+  total,
   className = "",
 }: {
   route: CreatorFeeResult;
+  /** Cumulative creator fees; null when pump.fun is unreachable and we have no cached figure. */
+  total: CreatorFeeTotal | null;
   className?: string;
 }) {
   const config = route.data;
@@ -145,7 +153,7 @@ export function MimosTribute({
           <ul className="mt-2.5 space-y-2">
             {recipients.map((r) => (
               <li key={r.address} className="flex items-center gap-2.5">
-                <Solscan address={r.address} />
+                <Solscan address={r.address} label={FEE_RECIPIENT_LABELS[r.address]} />
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-violet/10">
                   <div
                     className="h-full rounded-full bg-violet/70"
@@ -160,28 +168,35 @@ export function MimosTribute({
           </ul>
           <p className="wiz-caption mt-2.5">
             Shares are the recipients’ basis points from the fee-share account,
-            summing to 100%. Amounts received are not shown — see below.
+            summing to 100%. The chain proves the split; the names come from the
+            token team — no wallet carries a label on-chain. Historic payouts are
+            not 50/50: this split was configured in May, and earlier fees went
+            elsewhere.
           </p>
         </div>
       )}
 
-      {/* The honest refusal — the point of the card. */}
-      <div className="mt-4 border-t border-violet/15 pt-3">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-muted">
-          Why there is no total here
-        </p>
-        <p className="mt-1.5 text-sm leading-relaxed text-ink">
-          The lore says 100% of creator fees go to Mimo, and the fees are real and
-          traceable. What the chain will not tell us is which of these recipients
-          is Mimo — the wallets are unlabelled, and the split has been
-          reconfigured before. A number under a person’s name is a claim about
-          that person, so the tower will not print one it cannot prove.
-        </p>
-        <p className="wiz-caption mt-2">
-          pump.fun shows this coin’s cumulative creator rewards on its own page,
-          sourced from its own ledger. Read it there.
-        </p>
-      </div>
+      {/* The total. The chain proves the money; the team named the wallets. */}
+      {total && (
+        <div className="mt-4 border-t border-violet/15 pt-3">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-muted">
+            Paid to creators since launch
+          </p>
+          <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-ink">
+            {total.cumulativeSol.toLocaleString("en-US", { maximumFractionDigits: 0 })}{" "}
+            <span className="text-lg text-muted">SOL</span>
+          </p>
+          <p className="wiz-caption mt-2">
+            As pump.fun’s own ledger reports it
+            {total.numTrades
+              ? `, across ${total.numTrades.toLocaleString("en-US")} trades`
+              : ""}
+            . Independently reproducible: summing every outflow from the
+            creator-vault account gave 843.97 SOL against their 845 on 26 Jul —
+            the difference is fees not yet claimed out of the pool.
+          </p>
+        </div>
+      )}
 
       <p className="mt-3 text-xs">
         <a

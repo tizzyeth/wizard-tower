@@ -136,6 +136,32 @@ export type FeeShareConfig = {
   totalBps: number;
 };
 
+/**
+ * Cumulative creator fees this coin has paid, as pump.fun's own ledger reports
+ * them — the same ledger the card links out to.
+ *
+ * Their `cumulativeCreatorFee` is a plain SOL figure; the sibling
+ * `cumulativeCreatorFeeSOL` in the same response is that number divided by 1e9
+ * and is simply wrong, so it is ignored. The figure is independently
+ * reproducible: summing every outflow from the creator-vault PDA
+ * (42pktb2N…) gave 843.97 SOL against their 845 on 2026-07-26 — a 0.12% gap,
+ * which is the balance not yet claimed out of the PumpSwap vault. We do not run
+ * that scan per request: it is 36 paginated calls, and this figure moves slowly.
+ */
+const totalSchema = z
+  .object({
+    cumulativeCreatorFee: z.union([z.string(), z.number()]).nullish(),
+    numTrades: z.number().nullish(),
+  })
+  .loose();
+
+export type CreatorFeeTotal = {
+  cumulativeSol: number;
+  numTrades: number | null;
+  /** Named in the UI — the reader should know whose ledger this is. */
+  source: "pump.fun";
+};
+
 export type CreatorFeeResult = {
   ok: boolean;
   stale: boolean;
@@ -346,4 +372,52 @@ export async function getCreatorFeeRoute(
 export function __clearCreatorFeeCache(): void {
   cache = null;
   inFlight = null;
+}
+
+// ── Cumulative total ────────────────────────────────────────────────────────
+
+const TOTAL_TTL_MS = 60 * 60_000;
+let totalCache: { data: CreatorFeeTotal; fetchedAt: number } | null = null;
+let totalInFlight: Promise<CreatorFeeTotal | null> | null = null;
+
+async function fetchTotal(): Promise<CreatorFeeTotal | null> {
+  const res = await fetch(
+    `https://swap-api.pump.fun/v1/coins/${TOKEN.mint}/creator-fees`,
+    { signal: AbortSignal.timeout(8_000), headers: { accept: "application/json" } },
+  );
+  if (!res.ok) throw new Error(`pump.fun creator-fees returned ${res.status}`);
+  const json: unknown = await res.json();
+  const parsed = totalSchema.safeParse(json);
+  if (!parsed.success) return null;
+
+  const sol = Number(parsed.data.cumulativeCreatorFee);
+  if (!Number.isFinite(sol) || sol < 0) return null;
+  return {
+    cumulativeSol: sol,
+    numTrades: parsed.data.numTrades ?? null,
+    source: "pump.fun",
+  };
+}
+
+/** Cumulative creator fees, 1h cache, last-good on failure (never blanks the card). */
+export async function getCreatorFeeTotal(): Promise<{
+  data: CreatorFeeTotal | null;
+  stale: boolean;
+  dataAsOf: number | null;
+}> {
+  const now = Date.now();
+  if (totalCache && now - totalCache.fetchedAt < TOTAL_TTL_MS) {
+    return { data: totalCache.data, stale: false, dataAsOf: totalCache.fetchedAt };
+  }
+  try {
+    totalInFlight ??= fetchTotal();
+    const data = await totalInFlight;
+    if (!data) return { data: totalCache?.data ?? null, stale: !!totalCache, dataAsOf: totalCache?.fetchedAt ?? null };
+    totalCache = { data, fetchedAt: Date.now() };
+    return { data, stale: false, dataAsOf: totalCache.fetchedAt };
+  } catch {
+    return { data: totalCache?.data ?? null, stale: !!totalCache, dataAsOf: totalCache?.fetchedAt ?? null };
+  } finally {
+    totalInFlight = null;
+  }
 }
