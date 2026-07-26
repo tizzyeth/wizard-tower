@@ -14,7 +14,7 @@ import { TheProphecyFeed } from "@/components/cards/TheProphecyFeed";
 import { CouncilOfHolders } from "@/components/cards/CouncilOfHolders";
 import { MimosTribute } from "@/components/cards/MimosTribute";
 import { getMarket } from "@/lib/sources/dexscreener";
-import { getCreatorFeeRoute } from "@/lib/sources/creator-fees";
+import { getCreatorFeeRoute, getCreatorFeeTotal } from "@/lib/sources/creator-fees";
 import { getOhlcv, DEFAULT_TIMEFRAME } from "@/lib/sources/geckoterminal";
 import { activePoolsFromMarket } from "@/lib/sources/gecko-trades";
 import { getTradesWithArchive } from "@/lib/trades-archive";
@@ -90,7 +90,10 @@ export default async function Home({
   // RugCheck reports — nothing about the route is hardcoded. Structural data only
   // (who the fee splits between), never a money total; see the reasoning in
   // lib/sources/creator-fees.ts. Degrades to the static explainer if unreadable.
-  const creatorFeeRoute = await getCreatorFeeRoute(initialSafety.data?.creator ?? null);
+  const [creatorFeeRoute, creatorFeeTotal] = await Promise.all([
+    getCreatorFeeRoute(initialSafety.data?.creator ?? null),
+    getCreatorFeeTotal(),
+  ]);
 
   // Seed the Council of Holders from the latest snapshot in our DB (hourly cron).
   // Reads DB only — null (no snapshot yet / no DB) renders the honest empty state.
@@ -211,7 +214,11 @@ export default async function Home({
           className="col-span-12 lg:col-span-7"
         />
         {/* 9 · Mimo's Tribute — creator-fee route (M9, link-out variant) */}
-        <MimosTribute route={creatorFeeRoute} className="col-span-12 lg:col-span-5" />
+        <MimosTribute
+          route={creatorFeeRoute}
+          total={creatorFeeTotal.data}
+          className="col-span-12 lg:col-span-5"
+        />
         {/* 10 · The Prophecy Feed — X posts (live · M6) */}
         <TheProphecyFeed
           initialOfficial={initialOfficial}
