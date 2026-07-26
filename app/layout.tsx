@@ -83,18 +83,17 @@ export default function RootLayout({
             production build, in CI, or on a self-hosted deploy it is a
             guaranteed 404 and a console error on every page view.
 
-            Gated on our own variable rather than Vercel's `VERCEL` because that
-            one only reaches the app when the project has "expose System
-            Environment Variables" switched on — this project does not, and
-            trusting it silently turned analytics off in production. Set
+            Gated on our own variable rather than Vercel's `VERCEL`, which only
+            reaches the app when the project has "expose System Environment
+            Variables" switched on — this project does not. Set
             WIZARD_ANALYTICS=1 wherever the edge actually serves the script.
 
-            Read with a bracket, not a dot: the compiler substitutes the literal
-            value of `process.env.FOO` at build time, so a dot here bakes in
-            whatever the build machine saw and a later change to the variable
-            never takes effect. `process.env["FOO"]` is left alone and looked up
-            per request, which is what a deployment-time switch has to be. */}
-        {process.env["WIZARD_ANALYTICS"] ? <Analytics /> : null}
+            Verifying this by hand is a trap worth knowing about: on Vercel the
+            injected tag is not /_vercel/insights/script.js but a per-project
+            random path (/<hash>/script.js) chosen to survive ad blockers, so
+            grepping the network log for "insights" reports analytics missing
+            when it is working. Check `typeof window.va === "function"`. */}
+        {process.env.WIZARD_ANALYTICS ? <Analytics /> : null}
       </body>
     </html>
   );
