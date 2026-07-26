@@ -1,5 +1,6 @@
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { GrainOverlay } from "@/components/wizard/GrainOverlay";
+import { WizardBackdrop } from "@/components/wizard/WizardBackdrop";
 import { CommandPalette } from "@/components/wizard/CommandPalette";
 import { SiteFooter } from "@/components/footer/SiteFooter";
 import { SiteHeader } from "@/components/header/SiteHeader";
@@ -115,6 +116,7 @@ export default async function Home({
 
   return (
     <>
+      <WizardBackdrop />
       <GrainOverlay />
       <CommandPalette />
       <SiteHeader initialMarket={initialMarket} health={health} />

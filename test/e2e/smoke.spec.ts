@@ -285,6 +285,25 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     expect(consoleErrors, "no console errors").toEqual([]);
   });
 
+  test("the header VHS switch shares its state with the palette command", async ({ page }) => {
+    await mockApiRoutes(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // Both controls drive the same state (lib/vhs.ts, DOM attribute as the source
+    // of truth) — two switches that disagreed would be worse than one.
+    const headerSwitch = page.getByRole("switch", { name: /vhs overlay/i });
+    await expect(headerSwitch).toHaveAttribute("aria-checked", "true");
+
+    await headerSwitch.click();
+    await expect(page.locator("html")).toHaveAttribute("data-grain", "off");
+    await expect(headerSwitch).toHaveAttribute("aria-checked", "false");
+
+    // The palette, opened after, must show the state the header just set.
+    await page.getByRole("button", { name: /open command palette/i }).click();
+    await page.getByRole("combobox", { name: /search commands/i }).fill("vhs");
+    await expect(page.getByRole("option", { name: /turn vhs overlay on/i })).toBeVisible();
+  });
+
   test("the VHS overlay toggles off from the palette", async ({ page }) => {
     await mockApiRoutes(page);
     await page.goto("/", { waitUntil: "networkidle" });

@@ -3,6 +3,7 @@ import type { MarketResult } from "@/lib/sources/dexscreener";
 import type { HealthReport } from "@/lib/health";
 import { CaChip } from "./CaChip";
 import { CommandKButton } from "./CommandKButton";
+import { VhsToggle } from "./VhsToggle";
 import { BuyMenu } from "./BuyMenu";
 import { LiveDot } from "./LiveDot";
 import { PriceTicker } from "./PriceTicker";
@@ -54,6 +55,8 @@ export function SiteHeader({
         <PriceTicker initial={initialMarket} />
 
         <div className="ml-auto flex items-center gap-3">
+          <VhsToggle />
+
           <CommandKButton />
 
           <nav aria-label="community links" className="hidden items-center gap-3 md:flex">
