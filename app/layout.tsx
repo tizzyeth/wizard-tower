@@ -78,11 +78,17 @@ export default function RootLayout({
             identifiers, no profile of the visitor. Kept compatible with the
             promise the Buy menu makes about never touching a wallet.
 
-            Only mounted on Vercel. The script it pulls, /_vercel/insights/
-            script.js, is injected by Vercel's edge and exists nowhere else, so
-            anywhere else — a local production build, CI, a self-hosted deploy —
-            it is a guaranteed 404 and a console error on every page view. */}
-        {process.env.VERCEL ? <Analytics /> : null}
+            Opt-in, because the script it pulls (/_vercel/insights/script.js) is
+            injected by Vercel's edge and exists nowhere else: in a local
+            production build, in CI, or on a self-hosted deploy it is a
+            guaranteed 404 and a console error on every page view.
+
+            Gated on our own variable rather than Vercel's `VERCEL` because that
+            one only reaches the app when the project has "expose System
+            Environment Variables" switched on — this project does not, and
+            trusting it silently turned analytics off in production. Set
+            WIZARD_ANALYTICS=1 wherever the edge actually serves the script. */}
+        {process.env.WIZARD_ANALYTICS ? <Analytics /> : null}
       </body>
     </html>
   );

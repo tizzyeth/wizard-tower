@@ -28,6 +28,7 @@ Create `.env.local` in the repo root:
 | `X_POLL_ENABLED` | poller kill switch | `false` = no-op with zero API calls |
 | `CRON_SECRET` | cron routes | generate with `openssl rand -hex 32` |
 | `NEXT_PUBLIC_SITE_URL` | canonical URLs | production only |
+| `WIZARD_ANALYTICS` | Vercel Web Analytics | set to `1` only where Vercel's edge serves `/_vercel/insights/script.js`; anywhere else it is a 404 per page view |
 
 Everything degrades without them — you can develop the market, chart, tape, and safety cards with no keys at all.
 
