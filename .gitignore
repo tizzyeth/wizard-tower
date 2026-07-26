@@ -54,3 +54,7 @@ HANDOFF.md
 
 # installed agent skills (vendored tooling, not project source)
 .agents/
+
+# Internal working documents — must never be published
+IMPLEMENTATION_PLAN.md
+Wizardcore-Visuals-Pack.pdf
