@@ -166,13 +166,6 @@ export function MimosTribute({
               </li>
             ))}
           </ul>
-          <p className="wiz-caption mt-2.5">
-            Shares are the recipients’ basis points from the fee-share account,
-            summing to 100%. The chain proves the split; the names come from the
-            token team — no wallet carries a label on-chain. Historic payouts are
-            not 50/50: this split was configured in May, and earlier fees went
-            elsewhere.
-          </p>
         </div>
       )}
 
