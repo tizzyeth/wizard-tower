@@ -8,7 +8,7 @@ name: Prophecy Feed poll (manual)
 #
 # NOTE (M8): no GitHub remote exists yet — this file is correct-by-construction and
 # matches snapshot.yml. Before it can run, M8 must add on the repo:
-#   • Variable  SITE_URL     = the production origin (e.g. https://wizard-tower-nu.vercel.app)
+#   • Variable  SITE_URL     = the production origin (e.g. https://www.smokingwiz.art)
 #   • Secret    CRON_SECRET  = the same value stored in Vercel prod
 # X_BEARER_TOKEN + X_POLL_ENABLED live in Vercel (server-side), NOT here — the
 # workflow only triggers the route; the route holds the paid key.

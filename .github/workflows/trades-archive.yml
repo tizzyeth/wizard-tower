@@ -40,7 +40,7 @@ name: Trade archive (manual)
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # Requires, on the repo (Settings → Secrets and variables → Actions):
-#   • Variable  SITE_URL     = production origin, e.g. https://wizard-tower-nu.vercel.app
+#   • Variable  SITE_URL     = production origin, e.g. https://www.smokingwiz.art
 #   • Secret    CRON_SECRET  = the same value stored in Vercel prod
 # Scheduled workflows only fire from the default branch.
 

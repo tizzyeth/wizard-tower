@@ -9,6 +9,7 @@ import type { FlowStats, TradesResult } from "@/lib/sources/gecko-trades";
 import { fmtDateUtc, fmtInt, fmtUsdCompact, fmtUsdTrade } from "@/lib/format";
 import { useOhlcv } from "./useOhlcv";
 import { useTrades } from "./useTrades";
+import { ShareButton } from "@/components/wizard/ShareButton";
 
 /** Days of daily-volume history to render (§4: "30d daily volume bars"). */
 const VOLUME_DAYS = 30;
@@ -53,6 +54,7 @@ export function FlowOfMana({
           : "GeckoTerminal · trades + daily OHLCV"
       }
       className={className}
+        controls={<ShareButton card="flow" label="Flow of Mana" />}
     >
       {stale && <StaleBanner dataAsOf={trades.dataAsOf} />}
 

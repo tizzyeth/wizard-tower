@@ -28,7 +28,7 @@ import { computeVerdict, avgDailyVolume, BAND_LABEL } from "@/lib/metrics/verdic
 import { computeAth } from "@/lib/metrics/ath";
 import { fmtPrice, fmtUsdCompact, fmtInt, fmtPct, fmtMonthUtc } from "@/lib/format";
 
-export const SHARE_CARDS = ["verdict", "ledger", "holders", "wards"] as const;
+export const SHARE_CARDS = ["verdict", "ledger", "holders", "wards", "flow"] as const;
 export type ShareCardSlug = (typeof SHARE_CARDS)[number];
 
 export function isShareCard(value: string): value is ShareCardSlug {
@@ -63,6 +63,7 @@ export const SHARE_TITLES: Record<ShareCardSlug, string> = {
   ledger: "The Wizard’s Ledger",
   holders: "Council of Holders",
   wards: "Wards & Protections",
+  flow: "Flow of Mana",
 };
 
 const dash = "—";
@@ -89,7 +90,54 @@ export async function buildShareCard(slug: ShareCardSlug): Promise<ShareCard> {
       return buildWards();
     case "verdict":
       return buildVerdict();
+    case "flow":
+      return buildFlow();
   }
+}
+
+async function buildFlow(): Promise<ShareCard> {
+  const market = await getMarket();
+  const trades = await getTradesWithArchive({ pools: activePoolsFromMarket(market) });
+  const flow = trades.flow;
+  // The window's own counts are a lower bound until our archive covers the full
+  // 24h; the "~" and the footnote say so rather than quietly presenting them as
+  // a census (same rule the card on the page follows).
+  const counted = !!flow?.fullyCovered;
+  const approx = counted ? "" : "~";
+  const net = flow?.netUsd ?? null;
+
+  return {
+    slug: "flow",
+    eyebrow: SHARE_TITLES.flow,
+    headline: flow ? fmtUsdCompact(flow.totalUsd) : dash,
+    headlineNote: "traded in 24h",
+    stats: [
+      {
+        // Count rides in the label so the value stays one line — two lines here
+        // push the footer off a 630px canvas.
+        label: flow ? `Buys · ${fmtInt(flow.buyCount)}` : "Buys",
+        value: flow ? fmtUsdCompact(flow.buyUsd) : dash,
+        tone: "green",
+      },
+      {
+        label: flow ? `Sells · ${fmtInt(flow.sellCount)}` : "Sells",
+        value: flow ? fmtUsdCompact(flow.sellUsd) : dash,
+        tone: "rose",
+      },
+      {
+        label: "Net flow",
+        value: net == null ? dash : `${net >= 0 ? "+" : "−"}${fmtUsdCompact(Math.abs(net))}`,
+        tone: net == null ? "default" : net >= 0 ? "green" : "rose",
+      },
+      {
+        label: "Traders",
+        value: flow ? `${approx}${fmtInt(flow.uniqueTraders)}` : dash,
+      },
+    ],
+    footnote: counted
+      ? "Every trade across all active pools, deduplicated by transaction and counted from our own archive."
+      : "Trades across all active pools, deduplicated by transaction. Counts marked ~ are a lower bound — our archive does not yet cover the whole window.",
+  };
 }
 
 async function buildLedger(): Promise<ShareCard> {

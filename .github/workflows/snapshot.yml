@@ -6,7 +6,7 @@ name: Holder snapshot (manual)
 #
 # NOTE (M8): no GitHub remote exists yet — this file is correct-by-construction.
 # Before it can run, M8 must add two Actions settings on the repo:
-#   • Variable  SITE_URL     = the production origin (e.g. https://wizard-tower-nu.vercel.app)
+#   • Variable  SITE_URL     = the production origin (e.g. https://www.smokingwiz.art)
 #   • Secret    CRON_SECRET  = the same value stored in Vercel prod (openssl rand -hex 32)
 # Scheduled workflows only fire from the default branch once the repo is pushed.
 

@@ -229,7 +229,7 @@ export async function GET(
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Diamond size={10} color={GOLD} />
             <div style={{ display: "flex", color: AMETHYST_SOFT, fontSize: 20, letterSpacing: 1 }}>
-              wizard-tower-nu.vercel.app
+              smokingwiz.art
             </div>
             <div style={{ display: "flex", color: MUTED, fontSize: 20 }}>
               · community-built · not financial advice
