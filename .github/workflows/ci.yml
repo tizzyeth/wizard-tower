@@ -1,0 +1,76 @@
+name: CI
+
+# Runs the same gates a human runs before deploying: lint, unit tests, a
+# production build, then the end-to-end suite against that build.
+#
+# WHY THIS EXISTS. Vercel is connected to this repository, so anything that
+# lands on `main` deploys itself to the live site. Until now the only thing
+# standing between a broken commit and production was somebody remembering to
+# run the tests first. This makes that automatic, and gives branch protection a
+# status check worth requiring.
+#
+# NO SECRETS. Every job here runs on public data or fixtures: the build is
+# `force-dynamic`, so it never reads a database, and the e2e suite pins
+# WIZARD_DISABLE_DB=1 with a server-side fetch mock (see playwright.config.ts).
+# A fork's pull request can run the full suite without being handed a key.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+# A newer push makes an in-flight run pointless — cancel it rather than pay for
+# a verdict on code nobody will ship.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `--frozen-lockfile` fails the run if package.json and the lockfile
+      # disagree, which is the failure a local `pnpm install` would paper over.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # `test:e2e` builds first, so this is the build gate too — running
+      # `pnpm build` separately would compile the same thing twice.
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build and end-to-end tests
+        run: pnpm test:e2e
+
+      # Only useful when something failed; the trace explains what the assertion
+      # saw without needing to reproduce it locally.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
