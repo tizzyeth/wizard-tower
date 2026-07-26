@@ -23,9 +23,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LINKS, TOKEN } from "@/config/token";
+import { setVhs, vhsIsOn, vhsStoredPreference } from "@/lib/vhs";
 
 export const OPEN_COMMAND_EVENT = "wizard:open-command";
-const GRAIN_KEY = "wizard:grain";
 
 type RunResult = string | void;
 type CommandGroup = "Actions" | "Open" | "Jump to";
@@ -91,24 +91,6 @@ async function copyCa(): Promise<string> {
   }
 }
 
-/** Read/apply the persisted grain preference; returns whether grain is on. */
-function grainIsOn(): boolean {
-  return document.documentElement.dataset.grain !== "off";
-}
-function applyGrain(on: boolean) {
-  if (on) {
-    delete document.documentElement.dataset.grain;
-    try {
-      localStorage.setItem(GRAIN_KEY, "on");
-    } catch {}
-  } else {
-    document.documentElement.dataset.grain = "off";
-    try {
-      localStorage.setItem(GRAIN_KEY, "off");
-    } catch {}
-  }
-}
-
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -116,14 +98,7 @@ export function CommandPalette() {
   const [announce, setAnnounce] = useState("");
   // Lazy-init from the persisted preference (SSR-safe: no DOM access on the server,
   // and this component renders nothing until opened, so no hydration mismatch).
-  const [grainOn, setGrainOn] = useState<boolean>(() => {
-    if (typeof document === "undefined") return true;
-    try {
-      return localStorage.getItem(GRAIN_KEY) !== "off";
-    } catch {
-      return true;
-    }
-  });
+  const [grainOn, setGrainOn] = useState<boolean>(vhsStoredPreference);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -134,7 +109,7 @@ export function CommandPalette() {
   // Sync the persisted grain preference to the DOM once on mount — an external
   // system update (no React state change → no cascading render).
   useEffect(() => {
-    applyGrain(grainOn);
+    setVhs(grainOn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,7 +124,7 @@ export function CommandPalette() {
   const openPalette = useCallback(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     openRef.current = true;
-    setGrainOn(grainIsOn());
+    setGrainOn(vhsIsOn());
     setOpen(true);
     setQuery("");
     setActive(0);
@@ -220,8 +195,8 @@ export function CommandPalette() {
         keywords: "grain texture film noise overlay vhs scanlines crt tape retro",
         keepOpen: true,
         run: () => {
-          const next = !grainIsOn();
-          applyGrain(next);
+          const next = !vhsIsOn();
+          setVhs(next);
           setGrainOn(next);
           return next ? "Film grain on." : "Film grain off.";
         },

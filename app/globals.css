@@ -177,6 +177,64 @@ body {
   animation: none;
 }
 
+/* ── Wizard backdrop — ambient art from the visuals pack ──────────────
+   Atmosphere, never content. The cards are opaque, so these only show through
+   the bento's gutters and margins; each frame is masked so it fades long before
+   it reaches the column of numbers, and dimmed so nothing reads through a card
+   edge. Sits UNDER the body's plum orbs and hearth glow (z-index 0 vs the
+   grid's own stacking), and is dropped entirely below md, where the layout is
+   one full-width column with no gutters to show it in. */
+
+.wiz-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.wiz-backdrop-frame {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: cover;
+  /* Pull the frames toward the canvas: dimmed, desaturated a touch, and tinted
+     by the plum canvas showing through, so the art reads as part of the room
+     rather than a photo pasted behind it. */
+  opacity: 0.3;
+  filter: saturate(0.8) contrast(1.05);
+}
+
+.wiz-backdrop-top {
+  top: -4vh;
+  right: -6vw;
+  width: 70vw;
+  height: 66vh;
+  background-image: url("/wizard-council.jpg");
+  background-position: center 30%;
+  /* Fades to nothing toward the page's centre column, where the cards sit. */
+  -webkit-mask-image: radial-gradient(120% 100% at 82% 22%, #000 0%, transparent 68%);
+  mask-image: radial-gradient(120% 100% at 82% 22%, #000 0%, transparent 68%);
+}
+
+.wiz-backdrop-bottom {
+  bottom: -6vh;
+  left: -8vw;
+  width: 66vw;
+  height: 62vh;
+  background-image: url("/wizard-fisheye.jpg");
+  background-position: center 60%;
+  opacity: 0.26;
+  -webkit-mask-image: radial-gradient(115% 100% at 18% 78%, #000 0%, transparent 66%);
+  mask-image: radial-gradient(115% 100% at 18% 78%, #000 0%, transparent 66%);
+}
+
+@media (min-width: 768px) {
+  .wiz-backdrop {
+    display: block;
+  }
+}
+
 /* ── VHS overlay: grain · scanlines · vignette · tracking band ────────
    The tower is meant to look like it is being watched on a tape that has
    been rewound too many times, so this is deliberately visible rather than
