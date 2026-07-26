@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Agent git worktrees live inside the project; their transient build
     // artifacts make ESLint crash on files that vanish mid-scan.
     ".claude/worktrees/**",
+    // Installed agent skills are vendored third-party tools, not our source.
+    ".agents/**",
   ]),
 ]);
 
