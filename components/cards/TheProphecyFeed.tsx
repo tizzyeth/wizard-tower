@@ -185,7 +185,9 @@ function PostCard({ post }: { post: SocialPost }) {
           </p>
         )}
 
-        {post.media.length > 0 && <MediaThumbs media={post.media} />}
+        {post.media.length > 0 && (
+          <MediaThumbs media={post.media} postUrl={post.url ?? undefined} />
+        )}
 
         <div className="mt-2 flex items-center gap-4">
           <Metric glyph="♥" value={post.likes} label="likes" />
@@ -233,36 +235,96 @@ function Avatar({ src, name }: { src: string | null; name: string | null }) {
   );
 }
 
-/** Media thumbnails (up to 4), each a link back to the post on X. */
-function MediaThumbs({ media }: { media: XMedia[] }) {
+/** Media attachments (up to 4): photos, and videos that play in place. */
+function MediaThumbs({ media, postUrl }: { media: XMedia[]; postUrl?: string }) {
   const shown = media.slice(0, 4);
   return (
     <div className={`mt-2 grid gap-1.5 ${shown.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
       {shown.map((m, i) => (
-        <div
-          key={`${m.thumbUrl}-${i}`}
-          className="relative aspect-video overflow-hidden rounded border border-violet/20 bg-panel-2"
-        >
-          <Image
-            src={m.thumbUrl}
-            alt={m.type === "photo" ? "Photo attached to the post" : "Video preview from the post"}
-            fill
-            sizes="(max-width: 768px) 45vw, 300px"
-            className="object-cover"
-          />
-          {m.type !== "photo" && (
-            <span
-              aria-hidden
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-canvas/70 text-sm text-ink">
-                ▶
-              </span>
-            </span>
-          )}
-        </div>
+        <MediaTile key={`${m.thumbUrl}-${i}`} media={m} postUrl={postUrl} />
       ))}
     </div>
+  );
+}
+
+/**
+ * One attachment. A photo is just a thumbnail; a video shows its poster with a
+ * play control and swaps in a real <video> on click.
+ *
+ * Click-to-play, never autoplay: these cards sit in a scrolling feed, and a
+ * page that starts downloading several clips on load spends someone's data
+ * without being asked. The poster is already loaded, so the swap is instant.
+ *
+ * Rows stored before the poller requested `variants` have no `videoUrl`. Those
+ * fall back to opening the post on X rather than showing a control that does
+ * nothing — which is exactly the bug this replaces.
+ */
+function MediaTile({ media, postUrl }: { media: XMedia; postUrl?: string }) {
+  const [playing, setPlaying] = useState(false);
+  const isVideo = media.type !== "photo";
+  const label =
+    media.type === "photo" ? "Photo attached to the post" : "Video preview from the post";
+
+  if (isVideo && playing && media.videoUrl) {
+    return (
+      <div className="relative aspect-video overflow-hidden rounded border border-violet/20 bg-panel-2">
+        {/* Streamed through our own origin: X's CDN 403s any request carrying a
+            third-party Referer, and `referrerPolicy` is ignored on <video>
+            (all values measured, all failed). See app/api/media/video/route.ts. */}
+        <video
+          src={`/api/media/video?u=${encodeURIComponent(media.videoUrl)}`}
+          poster={media.thumbUrl}
+          controls
+          autoPlay
+          playsInline
+          loop={media.type === "animated_gif"}
+          muted={media.type === "animated_gif"}
+          className="h-full w-full object-contain bg-black"
+        />
+      </div>
+    );
+  }
+
+  const tile = (
+    <>
+      <Image
+        src={media.thumbUrl}
+        alt={label}
+        fill
+        sizes="(max-width: 768px) 45vw, 300px"
+        className="object-cover"
+      />
+      {isVideo && (
+        <span aria-hidden className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-canvas/75 text-sm text-ink ring-1 ring-violet/40 transition-transform group-hover:scale-110">
+            ▶
+          </span>
+        </span>
+      )}
+    </>
+  );
+
+  const shell = "group relative aspect-video overflow-hidden rounded border border-violet/20 bg-panel-2";
+
+  if (!isVideo) return <div className={shell}>{tile}</div>;
+
+  // Playable here → a button. Not playable (old row) → a link to the post on X.
+  return media.videoUrl ? (
+    <button type="button" onClick={() => setPlaying(true)} className={`${shell} cursor-pointer`}>
+      <span className="sr-only">Play the video attached to this post</span>
+      {tile}
+    </button>
+  ) : (
+    <a
+      href={postUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${shell} block`}
+      title="Watch on X"
+    >
+      <span className="sr-only">Watch this video on X</span>
+      {tile}
+    </a>
   );
 }
 

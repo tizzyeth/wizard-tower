@@ -73,12 +73,19 @@ const KV_OFFICIAL_USER = "x:user:official";
 
 export type XSource = "official" | "community";
 
-/** Normalized media thumbnail stored in the `media` jsonb column. */
+/** Normalized media stored in the `media` jsonb column. */
 export type XMedia = {
   /** "photo" | "video" | "animated_gif". */
   type: string;
   /** pbs.twimg.com thumbnail: a photo's `url` or a video/gif's `preview_image_url`. */
   thumbUrl: string;
+  /**
+   * Playable MP4 for video/gif media, chosen from the API's `variants`. Absent
+   * for photos, and for rows stored before variants were requested — the card
+   * falls back to opening the post on X, so a missing URL degrades rather than
+   * breaks. See `pickPlayableVariant` for why it is not simply the best one.
+   */
+  videoUrl?: string;
 };
 
 /** What the pure mapper produces from one raw response (no cost info). */
@@ -136,6 +143,17 @@ const includedMedia = z
     type: z.string().nullish(),
     url: z.string().nullish(),
     preview_image_url: z.string().nullish(),
+    variants: z
+      .array(
+        z
+          .object({
+            content_type: z.string().nullish(),
+            bit_rate: z.number().nullish(),
+            url: z.string().nullish(),
+          })
+          .loose(),
+      )
+      .nullish(),
   })
   .loose();
 
@@ -206,7 +224,9 @@ export function mapTimeline(raw: unknown, source: XSource, nowMs: number = Date.
       const m = mediaByKey.get(key);
       if (!m) continue;
       const thumbUrl = m.url ?? m.preview_image_url ?? null;
-      if (thumbUrl) media.push({ type: m.type ?? "photo", thumbUrl });
+      if (!thumbUrl) continue;
+      const videoUrl = pickPlayableVariant(m.variants);
+      media.push({ type: m.type ?? "photo", thumbUrl, ...(videoUrl ? { videoUrl } : {}) });
     }
 
     const pm = t.public_metrics;
@@ -277,7 +297,32 @@ async function xGet(path: string, params: Record<string, string>): Promise<unkno
 const TWEET_FIELDS = "public_metrics,created_at,attachments,author_id";
 const EXPANSIONS = "attachments.media_keys,author_id";
 const USER_FIELDS = "profile_image_url,name,username";
-const MEDIA_FIELDS = "preview_image_url,url,type";
+/**
+ * Choose which MP4 to play. X offers the same clip at several bitrates plus an
+ * HLS playlist; we take the highest-bitrate MP4 at or under `MAX_BITRATE` and
+ * ignore HLS, which needs a JS player no plain <video> tag can read.
+ *
+ * NOT the best available: the top variant is routinely ~10 Mbps 1080p, which is
+ * a lot of someone's data for a clip playing at roughly 480px wide inside a
+ * feed card. The ~2 Mbps 720p rung looks identical at that size.
+ */
+const MAX_BITRATE = 2_500_000;
+
+export function pickPlayableVariant(
+  variants: ReadonlyArray<{ content_type?: string | null; bit_rate?: number | null; url?: string | null }> | null | undefined,
+): string | undefined {
+  if (!variants?.length) return undefined;
+  const mp4s = variants
+    .filter((v) => v.content_type === "video/mp4" && typeof v.url === "string" && v.url)
+    .map((v) => ({ url: v.url as string, rate: v.bit_rate ?? 0 }));
+  if (!mp4s.length) return undefined;
+  const withinBudget = mp4s.filter((v) => v.rate <= MAX_BITRATE);
+  // Nothing under the cap (rare) → the smallest available, still bounded.
+  const pool = withinBudget.length ? withinBudget : mp4s;
+  return pool.reduce((best, v) => (v.rate > best.rate ? v : best)).url;
+}
+
+const MEDIA_FIELDS = "preview_image_url,url,type,variants";
 
 /**
  * Resolve the official account's numeric user id. Prefers the pinned config value
