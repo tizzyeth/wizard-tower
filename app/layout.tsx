@@ -87,8 +87,14 @@ export default function RootLayout({
             one only reaches the app when the project has "expose System
             Environment Variables" switched on — this project does not, and
             trusting it silently turned analytics off in production. Set
-            WIZARD_ANALYTICS=1 wherever the edge actually serves the script. */}
-        {process.env.WIZARD_ANALYTICS ? <Analytics /> : null}
+            WIZARD_ANALYTICS=1 wherever the edge actually serves the script.
+
+            Read with a bracket, not a dot: the compiler substitutes the literal
+            value of `process.env.FOO` at build time, so a dot here bakes in
+            whatever the build machine saw and a later change to the variable
+            never takes effect. `process.env["FOO"]` is left alone and looked up
+            per request, which is what a deployment-time switch has to be. */}
+        {process.env["WIZARD_ANALYTICS"] ? <Analytics /> : null}
       </body>
     </html>
   );
