@@ -1,5 +1,6 @@
 "use client";
 
+import { ShareButton } from "@/components/wizard/ShareButton";
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { StatHero } from "@/components/wizard/StatHero";
 import { StatGrid, type StatItem } from "@/components/wizard/StatGrid";
@@ -73,6 +74,7 @@ export function WizardsLedger({
       subtitle="live market snapshot"
       source="DexScreener · 30s · Helius · hourly"
       className={className}
+        controls={<ShareButton card="ledger" label="The Wizard’s Ledger" />}
     >
       {stale && d && <StaleBanner dataAsOf={result.dataAsOf} />}
 

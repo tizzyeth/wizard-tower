@@ -47,6 +47,18 @@ const S = THRESHOLDS.safety;
 
 /** pass/warn/fail — shared vocabulary with the safety rubric, same runes in the UI. */
 export type Band = CheckStatus; // "pass" | "warn" | "fail"
+
+/**
+ * How a band is written for a reader. The rubric speaks in pass/warn/fail
+ * internally, but "PASS" over a five-axis score reads like a certificate; these
+ * are the words the Verdict card and the shareable image both use, so the two
+ * can never drift apart.
+ */
+export const BAND_LABEL: Record<Band, string> = {
+  pass: "Strong",
+  warn: "Mixed",
+  fail: "Fragile",
+};
 export type AxisStatus = "scored" | "awaiting-data";
 export type InputDirection = "higher" | "lower" | "boolean";
 

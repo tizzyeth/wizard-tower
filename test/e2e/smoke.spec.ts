@@ -158,6 +158,32 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     expect(slack).toBeLessThan(200);
   });
 
+  test("each shareable card offers its image, and the route rejects anything else", async ({
+    page,
+  }) => {
+    await mockApiRoutes(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // The four modules that answer a question on their own carry the affordance…
+    for (const [anchor, slug] of [
+      ["#ledger", "ledger"],
+      ["#holders", "holders"],
+      ["#safety", "wards"],
+      ["#verdict", "verdict"],
+    ] as const) {
+      const link = page.locator(anchor).getByRole("link", { name: /shareable image/i });
+      await expect(link, anchor).toHaveAttribute("href", `/share/${slug}`);
+    }
+
+    // …and the ones that would lose their meaning as a still image do not.
+    for (const anchor of ["#chart", "#tape", "#flow", "#feed"]) {
+      await expect(
+        page.locator(anchor).getByRole("link", { name: /shareable image/i }),
+        anchor,
+      ).toHaveCount(0);
+    }
+  });
+
   /**
    * The Buy menu, reported broken from real use and fixed 2026-07-26. Its panel
    * carried both `.wiz-card` and `absolute`; `.wiz-card` declares

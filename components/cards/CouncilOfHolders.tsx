@@ -16,6 +16,7 @@
  */
 
 import { useMemo } from "react";
+import { ShareButton } from "@/components/wizard/ShareButton";
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { AsOf, StaleBanner } from "@/components/wizard/DataStatus";
 import type { HoldersResult, HolderChartPoint } from "@/lib/holders";
@@ -51,6 +52,7 @@ export function CouncilOfHolders({
       subtitle="holder distribution & concentration"
       source="Helius · hourly"
       className={className}
+        controls={<ShareButton card="holders" label="Council of Holders" />}
     >
       {stale && d && <StaleBanner dataAsOf={result.dataAsOf} />}
 
