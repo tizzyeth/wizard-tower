@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 // Canonical origin from env (Vercel/production) with a safe local fallback so
 // absolute URLs (canonical, og:image) resolve in every environment (§6 env vars).
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://wizard-tower-nu.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.smokingwiz.art";
 
 const DESCRIPTION =
   "Live due-diligence terminal for Smoking Wizard ($WIZARD) on Solana — price, liquidity, holders, safety wards, trade tape and an auto-computed verdict. Community-built · informational only · not financial advice.";

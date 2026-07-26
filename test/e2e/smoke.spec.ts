@@ -170,13 +170,14 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
       ["#holders", "holders"],
       ["#safety", "wards"],
       ["#verdict", "verdict"],
+      ["#flow", "flow"],
     ] as const) {
       const link = page.locator(anchor).getByRole("link", { name: /shareable image/i });
       await expect(link, anchor).toHaveAttribute("href", `/share/${slug}`);
     }
 
     // …and the ones that would lose their meaning as a still image do not.
-    for (const anchor of ["#chart", "#tape", "#flow", "#feed"]) {
+    for (const anchor of ["#chart", "#tape", "#feed"]) {
       await expect(
         page.locator(anchor).getByRole("link", { name: /shareable image/i }),
         anchor,
