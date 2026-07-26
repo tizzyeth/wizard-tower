@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    Tab icon. The emoji is drawn as text, so it renders with whatever emoji font
+    the viewer's OS ships — the same wizard everywhere, in each platform's own
+    house style, and no raster to keep in sync.
+
+    It sits on the canvas plum (#120C15) rather than transparent: a bare emoji
+    disappears into a dark browser tab strip, and the filled tile also gives the
+    icon a recognisable silhouette at 16px, which is the size that actually
+    matters.
+  -->
+  <rect width="64" height="64" rx="14" fill="#120C15" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.4" fill="none"
+        stroke="#A863D4" stroke-opacity="0.45" stroke-width="1.5" />
+  <text x="32" y="33" font-size="46" text-anchor="middle" dominant-baseline="central"
+        font-family="'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif">🧙‍♂️</text>
+</svg>
