@@ -161,11 +161,10 @@ export default async function Home({
               suspended on X, the community took the token over. Creator fees
               are{" "}
               <span className="text-violet-soft">
-                split 50/50 between two wallets
-              </span>{" "}
-              — the community says one is Mimo’s and one is the token team’s,
-              but the chain can’t confirm who owns them. See Mimo’s Tribute
-              below for the full route the money takes.
+                split 50/50 between Mimo and the token team
+              </span>
+              . See Mimo’s Tribute below for the full route the money takes and
+              what it has paid out so far.
             </p>
             <p className="text-muted">
               Buying $WIZARD is buying a creator-aligned memecoin: volatile,

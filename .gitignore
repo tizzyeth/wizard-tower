@@ -51,3 +51,6 @@ next-env.d.ts
 
 # Agent handoff notes — local working document, never published
 HANDOFF.md
+
+# installed agent skills (vendored tooling, not project source)
+.agents/
