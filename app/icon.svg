@@ -1,13 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!--
-    Tab icon. The emoji is drawn as text, so it renders with whatever emoji font
-    the viewer's OS ships — the same wizard everywhere, in each platform's own
-    house style, and no raster to keep in sync.
+    Tab icon for browsers that take an SVG. The emoji is drawn as text, so it
+    renders with whatever emoji font the viewer's OS ships — the wizard in each
+    platform's own house style.
 
     It sits on the canvas plum (#120C15) rather than transparent: a bare emoji
     disappears into a dark browser tab strip, and the filled tile also gives the
     icon a recognisable silhouette at 16px, which is the size that actually
     matters.
+
+    `favicon.ico` and `apple-icon.png` beside this file are the same artwork
+    rasterised (Chrome canvas, Apple Color Emoji). They are not redundant: a
+    browser asks for /favicon.ico by default whatever this file declares, and
+    answering that with a 404 puts a console error on every visit. Redraw all
+    three together if the mark ever changes.
   -->
   <rect width="64" height="64" rx="14" fill="#120C15" />
   <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.4" fill="none"

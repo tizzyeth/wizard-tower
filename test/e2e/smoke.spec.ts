@@ -305,6 +305,31 @@ test.describe("Wizard's Tower — smoke (mocked, deterministic)", () => {
     await expect(page.getByRole("option", { name: /turn vhs overlay on/i })).toBeVisible();
   });
 
+  /**
+   * Regression: the tab icon once lived only as app/icon.svg. A browser asks for
+   * /favicon.ico by default no matter what the document declares, so that missing
+   * file put a 404 in the console of every visit — caught here only as an unnamed
+   * console error, which cost an afternoon to trace. Assert the endpoints
+   * directly so the next deletion names itself.
+   */
+  test("every declared icon endpoint is actually served", async ({ page }) => {
+    await mockApiRoutes(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // What the document declares, plus the path browsers request unprompted.
+    const declared = await page.$$eval('link[rel="icon"], link[rel="apple-touch-icon"]', (ls) =>
+      ls.map((l) => l.getAttribute("href") ?? ""),
+    );
+    expect(declared.length, "icon links in <head>").toBeGreaterThan(0);
+
+    for (const href of [...declared, "/favicon.ico"]) {
+      const res = await page.request.get(href);
+      expect(res.status(), `${href} must be served`).toBe(200);
+      expect(Number(res.headers()["content-length"] ?? 1), `${href} must not be empty`)
+        .toBeGreaterThan(0);
+    }
+  });
+
   test("the VHS overlay toggles off from the palette", async ({ page }) => {
     await mockApiRoutes(page);
     await page.goto("/", { waitUntil: "networkidle" });

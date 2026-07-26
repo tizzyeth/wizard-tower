@@ -76,8 +76,13 @@ export default function RootLayout({
         <Providers>{children}</Providers>
         {/* Vercel Web Analytics: page counts only — no cookies, no cross-site
             identifiers, no profile of the visitor. Kept compatible with the
-            promise the Buy menu makes about never touching a wallet. */}
-        <Analytics />
+            promise the Buy menu makes about never touching a wallet.
+
+            Only mounted on Vercel. The script it pulls, /_vercel/insights/
+            script.js, is injected by Vercel's edge and exists nowhere else, so
+            anywhere else — a local production build, CI, a self-hosted deploy —
+            it is a guaranteed 404 and a console error on every page view. */}
+        {process.env.VERCEL ? <Analytics /> : null}
       </body>
     </html>
   );
