@@ -158,7 +158,11 @@ db/schema.ts                    # Drizzle schema
 
 ## 10. Backlog (post-v1)
 
-Per-card share-as-image (wizard-framed PNG, hl.eco camera-button style) · Telegram price/holder alert bot · i18n (RU first, hl.eco-style) · PWA install · historical trade archive table · extract the token-template (deploy for any CA) · curated TikTok/IG content module · light theme.
+**Closed by the product owner on 2026-07-26: the share card was the only item wanted, and it shipped. Everything else below is explicitly NOT planned — do not pick these up unprompted.**
+
+- ✅ **Per-card share-as-image** — `/share/<card>` renders a 1200×630 PNG from live data for the four modules that stand alone (Verdict, Ledger, Holders, Wards); a camera affordance on each opens it. `lib/share/cards.ts` shapes the numbers, `app/share/[card]/route.tsx` draws them.
+- ✅ Historical trade archive table (M10) · ✅ Bubblemaps — proven un-embeddable, shipped as an explained link-out (see §12).
+- ❌ Not planned: Telegram alert bot · i18n (RU) · PWA install · extract the token-template · curated TikTok/IG module · light theme.
 
 ## 11. Reference links
 

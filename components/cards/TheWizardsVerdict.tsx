@@ -13,6 +13,7 @@
  */
 
 import { useMemo } from "react";
+import { ShareButton } from "@/components/wizard/ShareButton";
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { AsOf, AwaitingReading, StaleBanner } from "@/components/wizard/DataStatus";
 import type { MarketResult } from "@/lib/sources/dexscreener";
@@ -25,6 +26,7 @@ import { evaluateChecklist } from "@/lib/metrics/safety";
 import {
   avgDailyVolume,
   computeVerdict,
+  BAND_LABEL,
   type AxisInput,
   type Band,
   type VerdictAxis,
@@ -42,8 +44,6 @@ const RUNE: Record<Band, { glyph: string; text: string; ring: string; fill: stri
   warn: { glyph: "◆", text: "text-gold", ring: "border-gold/40 bg-gold/10", fill: "bg-gold", sr: "mixed" },
   fail: { glyph: "✕", text: "text-rose", ring: "border-rose/40 bg-rose/10", fill: "bg-rose", sr: "weak" },
 };
-
-const BAND_LABEL: Record<Band, string> = { pass: "Strong", warn: "Mixed", fail: "Fragile" };
 
 /** Each axis links out to the card where its inputs can be verified (plan §7). */
 const AXIS_ANCHOR: Record<string, string> = {
@@ -155,6 +155,7 @@ export function TheWizardsVerdict({
       source="Safety · Distribution · Liquidity · Activity · Community"
       variant="gold"
       className={className}
+        controls={<ShareButton card="verdict" label="The Wizard’s Verdict" />}
     >
       {stale && verdict.score != null && <StaleBanner dataAsOf={dataAsOf} />}
 

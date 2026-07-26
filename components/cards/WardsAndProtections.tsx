@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { ShareButton } from "@/components/wizard/ShareButton";
 import { CardFrame } from "@/components/wizard/CardFrame";
 import { Rune } from "@/components/wizard/Rune";
 import { AsOf, AwaitingReading, StaleBanner } from "@/components/wizard/DataStatus";
@@ -69,6 +70,7 @@ export function WardsAndProtections({
       subtitle="safety checklist — a rubric, not an oracle"
       source="RugCheck · 1h"
       className={className}
+        controls={<ShareButton card="wards" label="Wards & Protections" />}
     >
       {stale && report && <StaleBanner dataAsOf={result.dataAsOf} />}
 
