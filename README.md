@@ -145,6 +145,8 @@ Non-configurable: the module set (edit `app/page.tsx` to swap cards), and non-So
 
 This is a community project. For infrastructure questions, see `.github/workflows/` and the code comments in `app/api/cron/`.
 
+`main` is protected and cannot be pushed to directly — it also cannot be deleted or force-pushed, by anyone. Changes land through a pull request whose `verify` check (lint → unit tests → build → e2e) is green; no review approval is required, so a green check is the only gate. Merging deploys to production, which is the reason the check is mandatory rather than advisory.
+
 ---
 
 *Community-built, unofficial, informational only. Not financial advice. DYOR.*
